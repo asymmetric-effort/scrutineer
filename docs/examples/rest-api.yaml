@@ -1,0 +1,421 @@
+# Complete example: Testing a REST API with CRUD operations, auth, captures, and assertions.
+#
+# This suite tests a user management API at http://localhost:8080.
+# It covers creating, reading, updating, and deleting users, with
+# authentication via bearer tokens and variable interpolation.
+#
+# Run with:
+#   scrutineer run --config scrutineer.yaml
+
+suite: "User Management REST API"
+tags: [api, rest, users]
+
+fixtures:
+  admin:
+    username: "admin@example.com"
+    password: "AdminPass123!"
+  new_user:
+    name: "Alice Smith"
+    email: "alice@example.com"
+    role: "editor"
+  updated_user:
+    name: "Alice Johnson"
+    role: "admin"
+
+setup:
+  - connector: http
+    action: request
+    method: POST
+    path: /api/test/reset
+    assert:
+      - field: status
+        operator: equal
+        expected: 200
+
+teardown:
+  - connector: http
+    action: request
+    method: POST
+    path: /api/test/cleanup
+
+tests:
+  # ---- Authentication ----
+
+  - name: "Authenticate as admin and receive a token"
+    connector: http
+    tags: [auth, smoke]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.admin.username}
+          password: ${fixture.admin.password}
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+          - field: body.token
+            operator: not_empty
+          - field: body.expires_in
+            operator: greater_than
+            expected: 0
+        capture:
+          auth_token: body.token
+
+  - name: "Reject invalid credentials"
+    connector: http
+    tags: [auth, smoke]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: "wrong@example.com"
+          password: "wrong"
+        assert:
+          - field: status
+            operator: equal
+            expected: 401
+          - field: body.error
+            operator: contains
+            expected: "invalid"
+
+  # ---- Create ----
+
+  - name: "Create a new user"
+    connector: http
+    tags: [crud, smoke]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.admin.username}
+          password: ${fixture.admin.password}
+        capture:
+          auth_token: body.token
+
+      - action: request
+        method: POST
+        path: /api/users
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        body:
+          name: ${fixture.new_user.name}
+          email: ${fixture.new_user.email}
+          role: ${fixture.new_user.role}
+        assert:
+          - field: status
+            operator: equal
+            expected: 201
+          - field: body.id
+            operator: not_empty
+          - field: body.name
+            operator: equal
+            expected: "Alice Smith"
+          - field: body.email
+            operator: equal
+            expected: "alice@example.com"
+          - field: body.role
+            operator: equal
+            expected: "editor"
+        capture:
+          user_id: body.id
+
+  - name: "Reject duplicate email on create"
+    connector: http
+    tags: [crud, validation]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.admin.username}
+          password: ${fixture.admin.password}
+        capture:
+          auth_token: body.token
+
+      - action: request
+        method: POST
+        path: /api/users
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        body:
+          name: "First User"
+          email: "duplicate@example.com"
+          role: "viewer"
+        assert:
+          - field: status
+            operator: equal
+            expected: 201
+        capture:
+          user_id: body.id
+
+      - action: request
+        method: POST
+        path: /api/users
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        body:
+          name: "Second User"
+          email: "duplicate@example.com"
+          role: "viewer"
+        assert:
+          - field: status
+            operator: equal
+            expected: 409
+          - field: body.error
+            operator: contains
+            expected: "already exists"
+
+  # ---- Read ----
+
+  - name: "Retrieve a user by ID"
+    connector: http
+    tags: [crud]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.admin.username}
+          password: ${fixture.admin.password}
+        capture:
+          auth_token: body.token
+
+      - action: request
+        method: POST
+        path: /api/users
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        body:
+          name: ${fixture.new_user.name}
+          email: "read-test@example.com"
+          role: ${fixture.new_user.role}
+        capture:
+          user_id: body.id
+
+      - action: request
+        method: GET
+        path: /api/users/${capture.user_id}
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+          - field: body.id
+            operator: equal
+            expected: ${capture.user_id}
+          - field: body.name
+            operator: equal
+            expected: "Alice Smith"
+
+  - name: "Return 404 for non-existent user"
+    connector: http
+    tags: [crud, smoke]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.admin.username}
+          password: ${fixture.admin.password}
+        capture:
+          auth_token: body.token
+
+      - action: request
+        method: GET
+        path: /api/users/99999999
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        assert:
+          - field: status
+            operator: equal
+            expected: 404
+
+  - name: "List users with pagination"
+    connector: http
+    tags: [crud]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.admin.username}
+          password: ${fixture.admin.password}
+        capture:
+          auth_token: body.token
+
+      - action: request
+        method: GET
+        path: /api/users
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        query:
+          page: "1"
+          limit: "5"
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+          - field: body.page
+            operator: equal
+            expected: 1
+          - field: body.limit
+            operator: equal
+            expected: 5
+
+  # ---- Update ----
+
+  - name: "Update a user"
+    connector: http
+    tags: [crud]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.admin.username}
+          password: ${fixture.admin.password}
+        capture:
+          auth_token: body.token
+
+      - action: request
+        method: POST
+        path: /api/users
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        body:
+          name: "Before Update"
+          email: "update-test@example.com"
+          role: "viewer"
+        capture:
+          user_id: body.id
+
+      - action: request
+        method: PUT
+        path: /api/users/${capture.user_id}
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        body:
+          name: ${fixture.updated_user.name}
+          role: ${fixture.updated_user.role}
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+          - field: body.name
+            operator: equal
+            expected: "Alice Johnson"
+          - field: body.role
+            operator: equal
+            expected: "admin"
+
+  # ---- Delete ----
+
+  - name: "Delete a user"
+    connector: http
+    tags: [crud]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.admin.username}
+          password: ${fixture.admin.password}
+        capture:
+          auth_token: body.token
+
+      - action: request
+        method: POST
+        path: /api/users
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        body:
+          name: "To Delete"
+          email: "delete-test@example.com"
+          role: "viewer"
+        capture:
+          user_id: body.id
+
+      - action: request
+        method: DELETE
+        path: /api/users/${capture.user_id}
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        assert:
+          - field: status
+            operator: equal
+            expected: 204
+
+      - action: request
+        method: GET
+        path: /api/users/${capture.user_id}
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        assert:
+          - field: status
+            operator: equal
+            expected: 404
+
+  # ---- Authorization ----
+
+  - name: "Reject unauthenticated request"
+    connector: http
+    tags: [auth]
+    steps:
+      - action: request
+        method: GET
+        path: /api/users
+        assert:
+          - field: status
+            operator: equal
+            expected: 401
+
+  # ---- Response Timing ----
+
+  - name: "Health endpoint responds within 500ms"
+    connector: http
+    tags: [performance, smoke]
+    steps:
+      - action: request
+        method: GET
+        path: /api/health
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+          - field: elapsed_ms
+            operator: less_than
+            expected: 500
+
+  # ---- Content Type ----
+
+  - name: "API returns JSON content type"
+    connector: http
+    tags: [api]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.admin.username}
+          password: ${fixture.admin.password}
+        capture:
+          auth_token: body.token
+
+      - action: request
+        method: GET
+        path: /api/users
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+          - field: headers
+            operator: header_contains
+            expected: "application/json"
+            header: "Content-Type"

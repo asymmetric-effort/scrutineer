@@ -1,0 +1,306 @@
+# Complete example: Testing a CLI tool with exec, stdin, and filesystem checks.
+#
+# This suite tests a hypothetical "jsonformat" CLI tool that reads JSON
+# from stdin or a file, reformats it, and writes the result to stdout or a file.
+#
+# Run with:
+#   scrutineer run --config scrutineer.yaml
+
+suite: "jsonformat CLI Tool"
+tags: [cli, tools]
+
+fixtures:
+  input_json: '{"name":"Alice","age":30,"active":true}'
+  pretty_json: |
+    {
+      "active": true,
+      "age": 30,
+      "name": "Alice"
+    }
+  temp_dir: "/tmp/scrutineer-cli-test"
+
+setup:
+  - connector: cli
+    action: exec
+    command: "mkdir -p /tmp/scrutineer-cli-test"
+    assert:
+      - field: exit_code
+        operator: equal
+        expected: 0
+
+teardown:
+  - connector: cli
+    action: exec
+    command: "rm -rf /tmp/scrutineer-cli-test"
+
+tests:
+  # ---- Basic Functionality ----
+
+  - name: "Format JSON from stdin"
+    connector: cli
+    tags: [smoke]
+    steps:
+      - action: exec
+        command: "jsonformat --pretty"
+        stdin: '{"name":"Alice","age":30}'
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+          - field: stdout
+            operator: contains
+            expected: '"name"'
+          - field: stdout
+            operator: contains
+            expected: '"Alice"'
+          - field: stderr
+            operator: equal
+            expected: ""
+
+  - name: "Compact JSON from stdin"
+    connector: cli
+    tags: [smoke]
+    steps:
+      - action: exec
+        command: "jsonformat --compact"
+        stdin: |
+          {
+            "name": "Alice",
+            "age":  30
+          }
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+          - field: stdout
+            operator: contains
+            expected: '{"age":30,"name":"Alice"}'
+
+  - name: "Sort keys alphabetically"
+    connector: cli
+    steps:
+      - action: exec
+        command: "jsonformat --sort-keys"
+        stdin: '{"zebra":1,"apple":2,"mango":3}'
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+          - field: stdout
+            operator: matches
+            expected: '"apple".*"mango".*"zebra"'
+
+  # ---- File I/O ----
+
+  - name: "Read from file and write to stdout"
+    connector: cli
+    steps:
+      - action: exec
+        command: "echo '{\"key\":\"value\"}' > /tmp/scrutineer-cli-test/input.json"
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+
+      - action: exec
+        command: "jsonformat --pretty /tmp/scrutineer-cli-test/input.json"
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+          - field: stdout
+            operator: contains
+            expected: '"key"'
+
+  - name: "Write output to file"
+    connector: cli
+    steps:
+      - action: exec
+        command: "echo '{\"a\":1}' | jsonformat --pretty --output /tmp/scrutineer-cli-test/output.json"
+        stdin: '{"a":1,"b":2}'
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+
+      - action: filesystem
+        path: /tmp/scrutineer-cli-test/output.json
+        exists: true
+        assert:
+          - field: exists
+            operator: equal
+            expected: true
+          - field: size
+            operator: greater_than
+            expected: 0
+
+  # ---- Filesystem Checks ----
+
+  - name: "Verify output file content"
+    connector: cli
+    steps:
+      - action: exec
+        command: "jsonformat --pretty --output /tmp/scrutineer-cli-test/verify.json"
+        stdin: '{"name":"Bob"}'
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+
+      - action: filesystem
+        path: /tmp/scrutineer-cli-test/verify.json
+        exists: true
+        contains: "Bob"
+        assert:
+          - field: exists
+            operator: equal
+            expected: true
+          - field: contains
+            operator: equal
+            expected: true
+
+  - name: "Verify output file size constraints"
+    connector: cli
+    steps:
+      - action: exec
+        command: "jsonformat --pretty --output /tmp/scrutineer-cli-test/size-check.json"
+        stdin: '{"key":"value"}'
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+
+      - action: filesystem
+        path: /tmp/scrutineer-cli-test/size-check.json
+        exists: true
+        size:
+          greater_than: 0
+          less_than: 1048576
+        assert:
+          - field: exists
+            operator: equal
+            expected: true
+
+  - name: "Non-existent file is correctly reported"
+    connector: cli
+    steps:
+      - action: filesystem
+        path: /tmp/scrutineer-cli-test/does-not-exist.json
+        exists: false
+        assert:
+          - field: exists
+            operator: equal
+            expected: false
+
+  # ---- Error Handling ----
+
+  - name: "Invalid JSON input returns non-zero exit code"
+    connector: cli
+    tags: [errors]
+    steps:
+      - action: exec
+        command: "jsonformat --pretty"
+        stdin: "this is not json"
+        assert:
+          - field: exit_code
+            operator: not_equal
+            expected: 0
+          - field: stderr
+            operator: not_empty
+
+  - name: "Empty input returns appropriate error"
+    connector: cli
+    tags: [errors]
+    steps:
+      - action: exec
+        command: "jsonformat --pretty"
+        stdin: ""
+        assert:
+          - field: exit_code
+            operator: not_equal
+            expected: 0
+
+  - name: "Non-existent input file returns error"
+    connector: cli
+    tags: [errors]
+    steps:
+      - action: exec
+        command: "jsonformat /tmp/scrutineer-cli-test/nonexistent.json"
+        assert:
+          - field: exit_code
+            operator: not_equal
+            expected: 0
+          - field: stderr
+            operator: contains
+            expected: "no such file"
+
+  # ---- Version and Help ----
+
+  - name: "Version flag outputs version string"
+    connector: cli
+    tags: [smoke]
+    steps:
+      - action: exec
+        command: "jsonformat --version"
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+          - field: stdout
+            operator: matches
+            expected: "\\d+\\.\\d+\\.\\d+"
+
+  - name: "Help flag outputs usage information"
+    connector: cli
+    tags: [smoke]
+    steps:
+      - action: exec
+        command: "jsonformat --help"
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+          - field: stdout
+            operator: contains
+            expected: "Usage"
+
+  # ---- Mixed: CLI output piped through filesystem ----
+
+  - name: "Full pipeline: process, write, and verify"
+    connector: cli
+    steps:
+      # Step 1: Process JSON and write to file
+      - action: exec
+        command: "jsonformat --pretty --sort-keys --output /tmp/scrutineer-cli-test/pipeline.json"
+        stdin: '{"z":3,"a":1,"m":2}'
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+
+      # Step 2: Verify the file exists and has content
+      - action: filesystem
+        path: /tmp/scrutineer-cli-test/pipeline.json
+        exists: true
+        contains: '"a"'
+        assert:
+          - field: exists
+            operator: equal
+            expected: true
+          - field: contains
+            operator: equal
+            expected: true
+          - field: is_dir
+            operator: equal
+            expected: false
+
+      # Step 3: Read the file back and verify order
+      - action: exec
+        command: "cat /tmp/scrutineer-cli-test/pipeline.json"
+        assert:
+          - field: exit_code
+            operator: equal
+            expected: 0
+          - field: stdout
+            operator: matches
+            expected: '"a".*"m".*"z"'

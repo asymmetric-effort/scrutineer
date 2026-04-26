@@ -1,0 +1,310 @@
+# Complete example: Testing a gRPC service with unary and streaming RPCs.
+#
+# This suite tests a hypothetical "ProductService" gRPC server running
+# at localhost:50051. It covers unary RPCs, server streaming, client
+# streaming, and bidirectional streaming.
+#
+# The gRPC connector uses server reflection to discover service and
+# method descriptors at runtime -- no compiled protobuf stubs are needed.
+#
+# Run with:
+#   scrutineer run --config scrutineer.yaml
+
+suite: "Product Service gRPC API"
+tags: [grpc, api]
+
+fixtures:
+  product:
+    name: "Widget Pro"
+    price: 29.99
+    category: "electronics"
+  auth_token: "test-service-token-123"
+
+tests:
+  # ---- Unary RPCs ----
+
+  - name: "Create a product via unary RPC"
+    connector: grpc
+    tags: [unary, smoke]
+    steps:
+      - action: unary
+        service: "store.ProductService"
+        method: "CreateProduct"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          name: ${fixture.product.name}
+          price: ${fixture.product.price}
+          category: ${fixture.product.category}
+        assert:
+          - field: status_code
+            operator: equal
+            expected: 0
+          - field: status_name
+            operator: equal
+            expected: "OK"
+          - field: response.id
+            operator: not_empty
+          - field: response.name
+            operator: equal
+            expected: "Widget Pro"
+        capture:
+          product_id: response.id
+
+  - name: "Get a product by ID"
+    connector: grpc
+    tags: [unary, smoke]
+    steps:
+      - action: unary
+        service: "store.ProductService"
+        method: "CreateProduct"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          name: "Lookup Test"
+          price: 9.99
+          category: "test"
+        capture:
+          product_id: response.id
+
+      - action: unary
+        service: "store.ProductService"
+        method: "GetProduct"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          id: ${capture.product_id}
+        assert:
+          - field: status_code
+            operator: equal
+            expected: 0
+          - field: response.id
+            operator: equal
+            expected: ${capture.product_id}
+          - field: response.name
+            operator: equal
+            expected: "Lookup Test"
+
+  - name: "Get non-existent product returns NOT_FOUND"
+    connector: grpc
+    tags: [unary, errors]
+    steps:
+      - action: unary
+        service: "store.ProductService"
+        method: "GetProduct"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          id: "nonexistent-id-99999"
+        assert:
+          - field: status_code
+            operator: equal
+            expected: 5
+          - field: status_name
+            operator: equal
+            expected: "NOT_FOUND"
+          - field: status_message
+            operator: contains
+            expected: "not found"
+
+  - name: "Unauthenticated request returns UNAUTHENTICATED"
+    connector: grpc
+    tags: [unary, auth]
+    steps:
+      - action: unary
+        service: "store.ProductService"
+        method: "GetProduct"
+        message:
+          id: "any-id"
+        assert:
+          - field: status_code
+            operator: equal
+            expected: 16
+          - field: status_name
+            operator: equal
+            expected: "UNAUTHENTICATED"
+
+  - name: "Delete a product"
+    connector: grpc
+    tags: [unary]
+    steps:
+      - action: unary
+        service: "store.ProductService"
+        method: "CreateProduct"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          name: "To Delete"
+          price: 1.00
+          category: "test"
+        capture:
+          product_id: response.id
+
+      - action: unary
+        service: "store.ProductService"
+        method: "DeleteProduct"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          id: ${capture.product_id}
+        assert:
+          - field: status_code
+            operator: equal
+            expected: 0
+
+      - action: unary
+        service: "store.ProductService"
+        method: "GetProduct"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          id: ${capture.product_id}
+        assert:
+          - field: status_code
+            operator: equal
+            expected: 5
+
+  # ---- Server Streaming ----
+
+  - name: "List products via server stream"
+    connector: grpc
+    tags: [streaming]
+    steps:
+      - action: unary
+        service: "store.ProductService"
+        method: "CreateProduct"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          name: "Stream Item 1"
+          price: 10.00
+          category: "stream-test"
+
+      - action: unary
+        service: "store.ProductService"
+        method: "CreateProduct"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          name: "Stream Item 2"
+          price: 20.00
+          category: "stream-test"
+
+      - action: server_stream
+        service: "store.ProductService"
+        method: "ListProducts"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          category: "stream-test"
+        assert:
+          - field: status_code
+            operator: equal
+            expected: 0
+          - field: responses
+            operator: collection_not_empty
+
+  - name: "Subscribe to price updates"
+    connector: grpc
+    tags: [streaming]
+    steps:
+      - action: unary
+        service: "store.ProductService"
+        method: "CreateProduct"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          name: "Watch Target"
+          price: 50.00
+          category: "watch-test"
+        capture:
+          product_id: response.id
+
+      - action: server_stream
+        service: "store.ProductService"
+        method: "WatchPrice"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        message:
+          product_id: ${capture.product_id}
+        assert:
+          - field: status_code
+            operator: equal
+            expected: 0
+
+  # ---- Client Streaming ----
+
+  - name: "Bulk import products via client stream"
+    connector: grpc
+    tags: [streaming]
+    steps:
+      - action: client_stream
+        service: "store.ProductService"
+        method: "BulkImport"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        messages:
+          - name: "Import 1"
+            price: 5.00
+            category: "bulk"
+          - name: "Import 2"
+            price: 10.00
+            category: "bulk"
+          - name: "Import 3"
+            price: 15.00
+            category: "bulk"
+        assert:
+          - field: status_code
+            operator: equal
+            expected: 0
+          - field: response.imported_count
+            operator: equal
+            expected: 3
+
+  # ---- Bidirectional Streaming ----
+
+  - name: "Interactive price negotiation via bidi stream"
+    connector: grpc
+    tags: [streaming]
+    steps:
+      - action: bidi_stream
+        service: "store.ProductService"
+        method: "Negotiate"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+        messages:
+          - product_id: "widget-001"
+            offered_price: 20.00
+          - product_id: "widget-001"
+            offered_price: 25.00
+          - product_id: "widget-001"
+            offered_price: 28.00
+        assert:
+          - field: status_code
+            operator: equal
+            expected: 0
+          - field: responses
+            operator: collection_not_empty
+
+  # ---- Metadata and Trailers ----
+
+  - name: "Server returns expected metadata headers"
+    connector: grpc
+    tags: [metadata]
+    steps:
+      - action: unary
+        service: "store.ProductService"
+        method: "CreateProduct"
+        metadata:
+          authorization: "Bearer ${fixture.auth_token}"
+          x-request-id: "test-req-001"
+        message:
+          name: "Metadata Test"
+          price: 1.00
+          category: "test"
+        assert:
+          - field: status_code
+            operator: equal
+            expected: 0
+          - field: metadata
+            operator: not_empty

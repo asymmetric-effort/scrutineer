@@ -1,0 +1,235 @@
+# Complete example: Load test configuration.
+#
+# This suite defines a load test against a REST API. The load test
+# configuration specifies concurrency, duration, and ramp-up, while
+# the test steps define the workload pattern.
+#
+# The suite includes both read-heavy and write operations to simulate
+# a realistic mixed workload.
+#
+# Run with:
+#   scrutineer run --config scrutineer-loadtest.yaml
+
+# --- Project config: scrutineer-loadtest.yaml ---
+#
+# version: "0.0.1"
+# tests:
+#   - tests/load-test.yaml
+# parallelism: 1
+# timeout: 60s
+# reporters:
+#   - type: ansi
+#   - type: json
+#     output: loadtest-results.json
+# connectors:
+#   http:
+#     base_url: "https://api.example.com"
+#     default_headers:
+#       Content-Type: "application/json"
+#     timeout: "30s"
+# telemetry:
+#   enabled: true
+#   output: loadtest.log
+# loadtest:
+#   concurrency: 50
+#   duration: 5m
+#   ramp_up: 30s
+
+# --- Test suite ---
+
+suite: "API Load Test - Mixed Workload"
+tags: [loadtest, api]
+
+fixtures:
+  auth:
+    email: "loadtest@example.com"
+    password: "LoadTestPass123!"
+  test_data:
+    user_prefix: "loadtest-user"
+
+tests:
+  # ---- Health Check (lightweight, high frequency) ----
+
+  - name: "Health endpoint under load"
+    connector: http
+    tags: [health, smoke]
+    steps:
+      - action: request
+        method: GET
+        path: /api/health
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+          - field: elapsed_ms
+            operator: less_than
+            expected: 1000
+
+  # ---- Authentication (medium weight) ----
+
+  - name: "Authentication throughput"
+    connector: http
+    tags: [auth]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.auth.email}
+          password: ${fixture.auth.password}
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+          - field: body.token
+            operator: not_empty
+          - field: elapsed_ms
+            operator: less_than
+            expected: 2000
+
+  # ---- Read Operations (bulk of the workload) ----
+
+  - name: "List users - paginated"
+    connector: http
+    tags: [read]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.auth.email}
+          password: ${fixture.auth.password}
+        capture:
+          auth_token: body.token
+
+      - action: request
+        method: GET
+        path: /api/users
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        query:
+          page: "1"
+          limit: "20"
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+          - field: elapsed_ms
+            operator: less_than
+            expected: 3000
+
+  - name: "Search users"
+    connector: http
+    tags: [read]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.auth.email}
+          password: ${fixture.auth.password}
+        capture:
+          auth_token: body.token
+
+      - action: request
+        method: GET
+        path: /api/users/search
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        query:
+          q: "test"
+          limit: "10"
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+          - field: elapsed_ms
+            operator: less_than
+            expected: 5000
+
+  # ---- Write Operations (lower frequency) ----
+
+  - name: "Create and delete user cycle"
+    connector: http
+    tags: [write]
+    steps:
+      - action: request
+        method: POST
+        path: /api/auth/login
+        body:
+          email: ${fixture.auth.email}
+          password: ${fixture.auth.password}
+        capture:
+          auth_token: body.token
+
+      - action: request
+        method: POST
+        path: /api/users
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        body:
+          name: "${fixture.test_data.user_prefix}-loadtest"
+          email: "${fixture.test_data.user_prefix}@loadtest.example.com"
+          role: "viewer"
+        assert:
+          - field: status
+            operator: status_class
+            expected: "2xx"
+        capture:
+          user_id: body.id
+
+      - action: request
+        method: DELETE
+        path: /api/users/${capture.user_id}
+        headers:
+          Authorization: "Bearer ${capture.auth_token}"
+        assert:
+          - field: status
+            operator: equal
+            expected: 204
+
+  # ---- Latency Thresholds ----
+
+  - name: "P95 latency check - critical endpoints"
+    connector: http
+    tags: [latency]
+    steps:
+      - action: request
+        method: GET
+        path: /api/health
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+          - field: elapsed_ms
+            operator: less_than
+            expected: 500
+
+# --- Distributed load test configuration ---
+#
+# To distribute this load test across multiple nodes, add to
+# scrutineer-loadtest.yaml:
+#
+# loadtest:
+#   concurrency: 300
+#   duration: 10m
+#   ramp_up: 1m
+#   distributed:
+#     binary: /usr/local/bin/scrutineer
+#     test_config: /opt/tests/scrutineer-loadtest.yaml
+#     nodes:
+#       - host: load-node-1.example.com
+#         port: 22
+#         user: loadtest
+#         key_file: ~/.ssh/loadtest_key
+#       - host: load-node-2.example.com
+#         port: 22
+#         user: loadtest
+#         key_file: ~/.ssh/loadtest_key
+#       - host: load-node-3.example.com
+#         port: 22
+#         user: loadtest
+#         key_file: ~/.ssh/loadtest_key
+#
+# With 300 concurrency and 3 nodes, each node runs 100 concurrent workers.
+# Results are aggregated across all nodes into a combined summary.

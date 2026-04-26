@@ -1,0 +1,389 @@
+# Complete example: Browser test for a login flow.
+#
+# This suite tests the authentication flow of a web application,
+# including successful login, failed login, password visibility toggle,
+# remember me functionality, and logout.
+#
+# Prerequisites:
+#   scrutineer browsers install
+#
+# Run with:
+#   scrutineer run --config scrutineer.yaml --tags browser
+
+suite: "Web Application Login Flow"
+tags: [browser, auth, e2e]
+
+fixtures:
+  app:
+    url: "https://app.example.com"
+  valid_user:
+    email: "testuser@example.com"
+    password: "SecurePassword123!"
+    display_name: "Test User"
+  invalid_user:
+    email: "nobody@example.com"
+    password: "WrongPassword"
+
+tests:
+  # ---- Successful Login ----
+
+  - name: "Login page loads correctly"
+    connector: browser
+    tags: [smoke]
+    steps:
+      - action: navigate
+        url: "${fixture.app.url}/login"
+
+      - action: wait_for_selector
+        selector: "#login-form"
+        timeout: 10s
+
+      - action: evaluate
+        expression: "document.title"
+        assert:
+          - field: value
+            operator: contains
+            expected: "Login"
+
+      - action: get_text
+        selector: "h1"
+        assert:
+          - field: text
+            operator: equal
+            expected: "Sign In"
+
+      - action: screenshot
+        path: "screenshots/login-page.png"
+
+  - name: "Successful login redirects to dashboard"
+    connector: browser
+    tags: [smoke]
+    steps:
+      # Navigate to login
+      - action: navigate
+        url: "${fixture.app.url}/login"
+
+      - action: wait_for_selector
+        selector: "#login-form"
+        timeout: 10s
+
+      # Enter credentials
+      - action: fill
+        selector: "#email"
+        value: ${fixture.valid_user.email}
+
+      - action: fill
+        selector: "#password"
+        value: ${fixture.valid_user.password}
+
+      # Submit
+      - action: click
+        selector: "button[type='submit']"
+
+      # Wait for dashboard to load
+      - action: wait_for_selector
+        selector: "[data-testid='dashboard']"
+        timeout: 15s
+
+      # Verify URL changed to dashboard
+      - action: evaluate
+        expression: "window.location.pathname"
+        assert:
+          - field: value
+            operator: equal
+            expected: "/dashboard"
+
+      # Verify welcome message shows user name
+      - action: get_text
+        selector: "[data-testid='welcome-message']"
+        assert:
+          - field: text
+            operator: contains
+            expected: ${fixture.valid_user.display_name}
+
+      # Verify navigation menu is visible
+      - action: wait_for_selector
+        selector: "nav.main-nav"
+
+      - action: screenshot
+        path: "screenshots/dashboard-after-login.png"
+
+  # ---- Failed Login ----
+
+  - name: "Invalid credentials show error message"
+    connector: browser
+    tags: [smoke, errors]
+    steps:
+      - action: navigate
+        url: "${fixture.app.url}/login"
+
+      - action: wait_for_selector
+        selector: "#login-form"
+
+      - action: fill
+        selector: "#email"
+        value: ${fixture.invalid_user.email}
+
+      - action: fill
+        selector: "#password"
+        value: ${fixture.invalid_user.password}
+
+      - action: click
+        selector: "button[type='submit']"
+
+      # Wait for error message
+      - action: wait_for_selector
+        selector: ".error-alert"
+        timeout: 10s
+
+      - action: get_text
+        selector: ".error-alert"
+        assert:
+          - field: text
+            operator: contains
+            expected: "Invalid email or password"
+
+      # Verify we are still on login page
+      - action: evaluate
+        expression: "window.location.pathname"
+        assert:
+          - field: value
+            operator: equal
+            expected: "/login"
+
+      # Verify password field is cleared
+      - action: evaluate
+        expression: "document.querySelector('#password').value"
+        assert:
+          - field: value
+            operator: equal
+            expected: ""
+
+      - action: screenshot
+        path: "screenshots/login-error.png"
+
+  - name: "Empty form submission shows validation errors"
+    connector: browser
+    tags: [validation]
+    steps:
+      - action: navigate
+        url: "${fixture.app.url}/login"
+
+      - action: wait_for_selector
+        selector: "#login-form"
+
+      # Click submit without filling in any fields
+      - action: click
+        selector: "button[type='submit']"
+
+      # Check for validation messages
+      - action: wait_for_selector
+        selector: ".field-error"
+        timeout: 5s
+
+      - action: get_text
+        selector: "#email-error"
+        assert:
+          - field: text
+            operator: contains
+            expected: "required"
+
+  # ---- Password Visibility ----
+
+  - name: "Password visibility toggle works"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "${fixture.app.url}/login"
+
+      - action: wait_for_selector
+        selector: "#login-form"
+
+      - action: fill
+        selector: "#password"
+        value: "MySecret123"
+
+      # Verify password is hidden by default
+      - action: get_attribute
+        selector: "#password"
+        attribute: "type"
+        assert:
+          - field: value
+            operator: equal
+            expected: "password"
+
+      # Click the show/hide toggle
+      - action: click
+        selector: "[data-testid='toggle-password']"
+
+      # Verify password is now visible
+      - action: get_attribute
+        selector: "#password"
+        attribute: "type"
+        assert:
+          - field: value
+            operator: equal
+            expected: "text"
+
+      # Toggle back
+      - action: click
+        selector: "[data-testid='toggle-password']"
+
+      - action: get_attribute
+        selector: "#password"
+        attribute: "type"
+        assert:
+          - field: value
+            operator: equal
+            expected: "password"
+
+  # ---- Forgot Password ----
+
+  - name: "Forgot password link navigates correctly"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "${fixture.app.url}/login"
+
+      - action: wait_for_selector
+        selector: "#login-form"
+
+      - action: click
+        selector: "a[href='/forgot-password']"
+        selector_type: css
+
+      - action: wait_for_selector
+        selector: "#forgot-password-form"
+        timeout: 10s
+
+      - action: evaluate
+        expression: "window.location.pathname"
+        assert:
+          - field: value
+            operator: equal
+            expected: "/forgot-password"
+
+      - action: get_text
+        selector: "h1"
+        assert:
+          - field: text
+            operator: contains
+            expected: "Reset Password"
+
+  # ---- Logout ----
+
+  - name: "Logout clears session and redirects to login"
+    connector: browser
+    steps:
+      # Login first
+      - action: navigate
+        url: "${fixture.app.url}/login"
+
+      - action: wait_for_selector
+        selector: "#login-form"
+
+      - action: fill
+        selector: "#email"
+        value: ${fixture.valid_user.email}
+
+      - action: fill
+        selector: "#password"
+        value: ${fixture.valid_user.password}
+
+      - action: click
+        selector: "button[type='submit']"
+
+      - action: wait_for_selector
+        selector: "[data-testid='dashboard']"
+        timeout: 15s
+
+      # Click user menu to reveal logout button
+      - action: click
+        selector: "[data-testid='user-menu']"
+
+      - action: wait_for_selector
+        selector: "[data-testid='logout-button']"
+
+      - action: click
+        selector: "[data-testid='logout-button']"
+
+      # Verify redirect to login page
+      - action: wait_for_selector
+        selector: "#login-form"
+        timeout: 10s
+
+      - action: evaluate
+        expression: "window.location.pathname"
+        assert:
+          - field: value
+            operator: equal
+            expected: "/login"
+
+      # Verify session is cleared by checking localStorage
+      - action: evaluate
+        expression: "localStorage.getItem('auth_token')"
+        assert:
+          - field: value
+            operator: equal
+            expected: null
+
+      - action: screenshot
+        path: "screenshots/after-logout.png"
+
+  # ---- Protected Route ----
+
+  - name: "Accessing protected page without login redirects to login"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "${fixture.app.url}/dashboard"
+
+      # Should be redirected to login
+      - action: wait_for_selector
+        selector: "#login-form"
+        timeout: 10s
+
+      - action: evaluate
+        expression: "window.location.pathname"
+        assert:
+          - field: value
+            operator: equal
+            expected: "/login"
+
+  # ---- Accessibility ----
+
+  - name: "Login form has proper ARIA attributes"
+    connector: browser
+    tags: [a11y]
+    steps:
+      - action: navigate
+        url: "${fixture.app.url}/login"
+
+      - action: wait_for_selector
+        selector: "#login-form"
+
+      # Check that the email input has an accessible label
+      - action: get_attribute
+        selector: "#email"
+        attribute: "aria-label"
+        assert:
+          - field: value
+            operator: not_empty
+
+      # Check that the submit button has a role
+      - action: evaluate
+        expression: |
+          (function() {
+            var btn = document.querySelector('button[type="submit"]');
+            return btn && (btn.getAttribute('role') === 'button' || btn.tagName === 'BUTTON');
+          })()
+        assert:
+          - field: value
+            operator: equal
+            expected: true
+
+      # Check that the form has a role using role selector
+      - action: get_attribute
+        selector: "form"
+        selector_type: role
+        attribute: "aria-label"
