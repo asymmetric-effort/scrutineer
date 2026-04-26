@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "=== Scrutineer pre-push checks ==="
+
+MODULES="core connector/cli connector/http connector/ssh connector/grpc connector/browser loadtest fuzz cmd/scrutineer"
+ROOT=$(git rev-parse --show-toplevel)
+
+echo ""
+echo "--- gofmt ---"
+UNFORMATTED=$(gofmt -l "$ROOT")
+if [ -n "$UNFORMATTED" ]; then
+    echo "FAIL: unformatted files:"
+    echo "$UNFORMATTED"
+    exit 1
+fi
+echo "PASS"
+
+echo ""
+echo "--- go vet ---"
+for mod in $MODULES; do
+    if [ -f "$ROOT/$mod/go.mod" ]; then
+        (cd "$ROOT/$mod" && go vet ./...) || { echo "FAIL: go vet $mod"; exit 1; }
+    fi
+done
+echo "PASS"
+
+echo ""
+echo "--- govulncheck ---"
+if command -v govulncheck &>/dev/null; then
+    for mod in $MODULES; do
+        if [ -f "$ROOT/$mod/go.mod" ]; then
+            (cd "$ROOT/$mod" && govulncheck ./...) || { echo "FAIL: govulncheck $mod"; exit 1; }
+        fi
+    done
+    echo "PASS"
+else
+    echo "SKIP: govulncheck not installed"
+fi
+
+echo ""
+echo "--- go test -race ---"
+for mod in $MODULES; do
+    if [ -f "$ROOT/$mod/go.mod" ]; then
+        echo "  testing $mod..."
+        (cd "$ROOT/$mod" && go test -race -coverprofile=coverage.out ./...) || { echo "FAIL: tests $mod"; exit 1; }
+    fi
+done
+echo "PASS"
+
+echo ""
+echo "--- coverage gate (98%) ---"
+for mod in $MODULES; do
+    if [ -f "$ROOT/$mod/coverage.out" ]; then
+        COVERAGE=$(cd "$ROOT/$mod" && go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | tr -d '%')
+        if [ -n "$COVERAGE" ]; then
+            PASS=$(echo "$COVERAGE >= 98.0" | bc -l 2>/dev/null || echo "1")
+            if [ "$PASS" = "0" ]; then
+                echo "FAIL: $mod coverage ${COVERAGE}% < 98%"
+                exit 1
+            fi
+        fi
+    fi
+done
+echo "PASS"
+
+echo ""
+echo "=== All pre-push checks passed ==="

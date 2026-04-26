@@ -1,0 +1,13 @@
+go 1.26.2
+
+use (
+	./cmd/scrutineer
+	./connector/browser
+	./connector/cli
+	./connector/grpc
+	./connector/http
+	./connector/ssh
+	./core
+	./fuzz
+	./loadtest
+)

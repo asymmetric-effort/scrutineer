@@ -1,0 +1,7 @@
+module github.com/scrutineer/scrutineer/connector/cli
+
+go 1.26.2
+
+require github.com/scrutineer/scrutineer/core v0.0.0
+
+replace github.com/scrutineer/scrutineer/core => ../../core
