@@ -120,6 +120,8 @@ jobs:
             if [ "$ARCH" = "amd64" ]; then RPM_ARCH="x86_64"; fi
             if [ "$ARCH" = "arm64" ]; then RPM_ARCH="aarch64"; fi
 
+            # Clean rpmbuild tree for each arch
+            rm -rf rpmbuild
             mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
             cp "$BINARY" "rpmbuild/SOURCES/scrutineer"
 
@@ -130,7 +132,7 @@ jobs:
           Summary:        Extensible test framework for CLI, API, and browser testing
           License:        MIT
           URL:            https://scrutineer.asymmetric-effort.com
-          BuildArch:      ${RPM_ARCH}
+          BuildArch:      noarch
 
           %description
           Scrutineer is a declarative YAML-based test framework for automating
@@ -146,8 +148,9 @@ jobs:
           /usr/bin/scrutineer
           SPEC
 
-            rpmbuild --define "_topdir $(pwd)/rpmbuild" --target "${RPM_ARCH}" -bb "rpmbuild/SPECS/scrutineer-${ARCH}.spec"
-            find rpmbuild/RPMS -name "*.rpm" -exec cp {} artifacts/ \;
+            rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb "rpmbuild/SPECS/scrutineer-${ARCH}.spec"
+            # Rename to include actual target arch in filename
+            find rpmbuild/RPMS -name "*.rpm" -exec sh -c 'cp "$1" "artifacts/scrutineer-${VERSION}-1.'"${RPM_ARCH}"'.rpm"' _ {} \;
           done
 
       - name: Upload packages
