@@ -24,18 +24,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+      - name: Setup Bun
+        uses: asymmetric-effort/actions/actions/setup-bun@main
 
       - name: Install dependencies
         working-directory: site
-        run: npm ci
+        run: bun install
 
       - name: Build site with SpecifyJS
         working-directory: site
-        run: npm run build
+        run: bun run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
