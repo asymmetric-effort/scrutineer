@@ -13,7 +13,7 @@ function Nav() {
     return h('nav', null,
         h('div', { className: 'nav-inner' },
             h('a', { href: '/', className: 'logo' },
-                h('img', { src: 'img/logo.svg', alt: 'Scrutineer', className: 'logo-icon', width: '28', height: '28' }),
+                h('img', { src: 'img/logo.png', alt: 'Scrutineer', className: 'logo-icon', width: '28', height: '28' }),
                 ' scrutineer'
             ),
             h('ul', { className: 'nav-links' },
@@ -241,7 +241,7 @@ const html = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scrutineer — Extensible Test Framework</title>
     <meta name="description" content="An extensible test framework for automating tests against CLI programs, APIs, and web applications. Zero third-party dependencies. Built in Go.">
-    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="icon" type="image/png" href="img/logo.png">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -255,8 +255,7 @@ mkdirSync(join(outDir, 'css'), { recursive: true });
 mkdirSync(join(outDir, 'img'), { recursive: true });
 writeFileSync(join(outDir, 'index.html'), html);
 cpSync(join(__dirname, '..', 'public', 'css', 'style.css'), join(outDir, 'css', 'style.css'));
-cpSync(join(__dirname, '..', 'public', 'img', 'logo.svg'), join(outDir, 'img', 'logo.svg'));
-cpSync(join(__dirname, '..', 'public', 'favicon.svg'), join(outDir, 'favicon.svg'));
+cpSync(join(__dirname, '..', 'public', 'img', 'logo.png'), join(outDir, 'img', 'logo.png'));
 cpSync(join(__dirname, '..', 'CNAME'), join(outDir, 'CNAME'));
 
 console.log('Site built to', outDir);
