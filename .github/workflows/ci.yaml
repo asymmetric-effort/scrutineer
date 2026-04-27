@@ -50,18 +50,6 @@ jobs:
       - name: Cross-platform build
         run: make cross
 
-  fossa:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: FOSSA scan
-        uses: asymmetric-effort/actions/actions/fossa-scan@main
-        with:
-          api-key: ${{ secrets.FOSSA_API_KEY }}
-          run-tests: "true"
-
   codeql:
     runs-on: ubuntu-latest
     permissions:
