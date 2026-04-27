@@ -133,6 +133,11 @@ jobs:
           License:        MIT
           URL:            https://scrutineer.asymmetric-effort.com
           BuildArch:      noarch
+          %global __strip /bin/true
+          %global __brp_strip /bin/true
+          %global __brp_strip_static_archive /bin/true
+          %global __brp_strip_comment_note /bin/true
+          %define debug_package %{nil}
 
           %description
           Scrutineer is a declarative YAML-based test framework for automating
