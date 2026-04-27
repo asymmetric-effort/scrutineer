@@ -148,7 +148,7 @@ jobs:
           /usr/bin/scrutineer
           SPEC
 
-            rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb "rpmbuild/SPECS/scrutineer-${ARCH}.spec"
+            rpmbuild --define "_topdir $(pwd)/rpmbuild" --define "_binaries_in_noarch_packages_terminate_build 0" -bb "rpmbuild/SPECS/scrutineer-${ARCH}.spec"
             # Rename to include actual target arch in filename
             find rpmbuild/RPMS -name "*.rpm" -exec sh -c 'cp "$1" "artifacts/scrutineer-${VERSION}-1.'"${RPM_ARCH}"'.rpm"' _ {} \;
           done
