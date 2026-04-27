@@ -140,12 +140,12 @@ function Protocols() {
     ];
 
     return h('section', { id: 'protocols' },
-        h('h2', null, 'Protocol Support'),
+        h('h2', null, 'Supported Configurations'),
         h('p', { className: 'subtitle' }, 'Test anything that speaks a protocol.'),
         h('table', { className: 'protocol-table' },
             h('thead', null,
                 h('tr', null,
-                    h('th', null, 'Protocol'),
+                    h('th', null, 'Feature'),
                     h('th', null, 'Connector'),
                     h('th', null, 'Status'),
                     h('th', null, 'Features')
