@@ -197,6 +197,12 @@ Error output is human-friendly first: a clear summary of what went wrong and why
 - **Godoc**: all exported Go types, functions, and interfaces documented in source comments (connector/developer audience)
 - **`docs/` directory**: user-facing markdown documentation — getting started guide, YAML schema reference, examples, connector usage
 
+## Coding Standards
+
+Organization coding standards are maintained at: http://coding-standards.asymmetric-effort.com/
+
+All code in this project must comply with those standards. The conventions below are project-specific supplements.
+
 ## Development Conventions
 
 - Go 1.26+ required.

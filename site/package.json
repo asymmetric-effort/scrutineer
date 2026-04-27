@@ -1,0 +1,13 @@
+{
+  "name": "scrutineer-site",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node src/build.mjs",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@asymmetric-effort/specifyjs": "^0.0.6"
+  }
+}
