@@ -17,17 +17,17 @@ import (
 
 // mockConnector records calls and returns canned results.
 type mockConnector struct {
-	mu          sync.Mutex
-	name        string
-	setupCalls  int
-	execCalls   int
-	tearCalls   int
-	setupErr    error
-	execErr     error
-	tearErr     error
-	execResult  *connector.Result
-	lastConfig  map[string]any
-	lastStep    connector.Step
+	mu         sync.Mutex
+	name       string
+	setupCalls int
+	execCalls  int
+	tearCalls  int
+	setupErr   error
+	execErr    error
+	tearErr    error
+	execResult *connector.Result
+	lastConfig map[string]any
+	lastStep   connector.Step
 }
 
 func newMockConnector(name string) *mockConnector {
@@ -67,12 +67,12 @@ func (m *mockConnector) Teardown(_ context.Context) error {
 
 // mockReporter records reporter calls.
 type mockReporter struct {
-	mu           sync.Mutex
-	suiteStarts  []reporter.SuiteInfo
-	testStarts   []reporter.TestInfo
-	stepResults  []reporter.StepResult
-	testEnds     []reporter.TestResult
-	suiteEnds    []reporter.SuiteSummary
+	mu          sync.Mutex
+	suiteStarts []reporter.SuiteInfo
+	testStarts  []reporter.TestInfo
+	stepResults []reporter.StepResult
+	testEnds    []reporter.TestResult
+	suiteEnds   []reporter.SuiteSummary
 }
 
 func (m *mockReporter) OnSuiteStart(suite reporter.SuiteInfo) {

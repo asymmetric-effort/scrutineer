@@ -13,13 +13,13 @@ import (
 
 // Target defines a declarative fuzz target from YAML.
 type Target struct {
-	Name       string            // target name
-	Connector  string            // which connector to use
-	Action     string            // the action to fuzz
-	Parameters map[string]any    // base parameters (some fields will be fuzzed)
-	FuzzFields []string          // which parameter fields to fuzz
-	Seed       []map[string]any  // seed corpus entries
-	Assert     []map[string]any  // assertions that must hold for any input
+	Name       string           // target name
+	Connector  string           // which connector to use
+	Action     string           // the action to fuzz
+	Parameters map[string]any   // base parameters (some fields will be fuzzed)
+	FuzzFields []string         // which parameter fields to fuzz
+	Seed       []map[string]any // seed corpus entries
+	Assert     []map[string]any // assertions that must hold for any input
 }
 
 // ParseTarget creates a Target from YAML parameters.

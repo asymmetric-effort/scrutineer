@@ -34,9 +34,9 @@ func (a *StatusCodeAssertion) Evaluate(actual any) error {
 
 // StatusClassAssertion checks that an HTTP status code belongs to a class (2xx, 3xx, 4xx, 5xx).
 type StatusClassAssertion struct {
-	Class    string
-	minCode  int
-	maxCode  int
+	Class   string
+	minCode int
+	maxCode int
 }
 
 // NewStatusClassAssertion creates a StatusClassAssertion for the given class string.

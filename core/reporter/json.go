@@ -47,10 +47,10 @@ type jsonOutput struct {
 // JSONReporter implements Reporter by collecting events and serializing
 // them as JSON on Flush.
 type JSONReporter struct {
-	suites   []jsonSuiteResult
-	current  *jsonSuiteResult
-	tests    map[string]*jsonTestEntry // keyed by suite+test name
-	testOrder []string                 // insertion order keys
+	suites    []jsonSuiteResult
+	current   *jsonSuiteResult
+	tests     map[string]*jsonTestEntry // keyed by suite+test name
+	testOrder []string                  // insertion order keys
 }
 
 // NewJSONReporter returns a new JSONReporter ready for use.

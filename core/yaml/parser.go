@@ -33,9 +33,9 @@ func (n NodeType) String() string {
 // Node represents a node in the parsed YAML tree.
 type Node struct {
 	Type     NodeType
-	Value    string       // for ScalarNode
-	Pairs    []KeyValue   // for MappingNode (ordered)
-	Children []*Node      // for SequenceNode
+	Value    string     // for ScalarNode
+	Pairs    []KeyValue // for MappingNode (ordered)
+	Children []*Node    // for SequenceNode
 	Line     int
 	Column   int
 }

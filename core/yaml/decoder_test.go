@@ -959,8 +959,8 @@ func TestUnmarshalStructNestedStruct(t *testing.T) {
 
 func TestUnmarshalStructUnexportedField(t *testing.T) {
 	type Config struct {
-		Name    string `yaml:"name"`
-		hidden  string //nolint:unused
+		Name   string `yaml:"name"`
+		hidden string //nolint:unused
 	}
 	input := []byte("name: test\nhidden: secret\n")
 	var cfg Config

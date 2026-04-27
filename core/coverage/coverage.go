@@ -12,14 +12,14 @@ type suiteData struct {
 
 // testData holds the internal mutable state for a test being tracked.
 type testData struct {
-	name            string
-	stepCount       int
-	assertionCount  int
-	ran             bool
-	skipped         bool
-	executedSteps   int
-	passedAsserts   int
-	failedAsserts   int
+	name           string
+	stepCount      int
+	assertionCount int
+	ran            bool
+	skipped        bool
+	executedSteps  int
+	passedAsserts  int
+	failedAsserts  int
 }
 
 // Tracker collects coverage data during test execution.

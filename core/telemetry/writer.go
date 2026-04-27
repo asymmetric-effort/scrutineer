@@ -5,9 +5,9 @@ import "io"
 // Writer writes telemetry records in TLV format to an underlying io.Writer.
 // It implements the RecordWriter interface.
 type Writer struct {
-	w           io.Writer
-	headerDone  bool
-	closed      bool
+	w          io.Writer
+	headerDone bool
+	closed     bool
 }
 
 // NewWriter creates a new Writer that writes to w.

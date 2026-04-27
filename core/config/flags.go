@@ -11,7 +11,7 @@ type Flags struct {
 	ConfigFile  string
 	Parallelism int
 	Timeout     string
-	Format      string   // reporter format override (ansi, json)
+	Format      string // reporter format override (ansi, json)
 	Verbose     bool
 	Tags        []string // filter tests by tags
 }

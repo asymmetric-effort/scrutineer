@@ -11,9 +11,9 @@ import (
 
 // mockConnector implements connector.Connector for testing.
 type mockConnector struct {
-	name     string
+	name      string
 	failEvery int // fail every N-th call; 0 = never fail
-	calls    int
+	calls     int
 }
 
 func (m *mockConnector) Name() string { return m.name }

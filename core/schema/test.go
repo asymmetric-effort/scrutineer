@@ -23,12 +23,12 @@ type Test struct {
 // Fields not explicitly tagged (method, path, body, command, etc.) are
 // collected into the Parameters map via ParseTestStep.
 type TestStep struct {
-	Connector  string           `yaml:"connector"`
-	Action     string           `yaml:"action"`
-	Parameters map[string]any   `yaml:"-"`
-	Assert     []map[string]any `yaml:"assert"`
+	Connector  string            `yaml:"connector"`
+	Action     string            `yaml:"action"`
+	Parameters map[string]any    `yaml:"-"`
+	Assert     []map[string]any  `yaml:"assert"`
 	Capture    map[string]string `yaml:"capture"`
-	Timeout    string           `yaml:"timeout"`
+	Timeout    string            `yaml:"timeout"`
 }
 
 // knownStepFields is the set of TestStep field names that have explicit

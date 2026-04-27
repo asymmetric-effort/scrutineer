@@ -365,7 +365,7 @@ func TestDecodeRecordTruncatedDetailLen(t *testing.T) {
 
 func TestDecodeRecordTruncatedTagsData(t *testing.T) {
 	var buf bytes.Buffer
-	binary.Write(&buf, binary.LittleEndian, int64(0))   // timestamp
+	binary.Write(&buf, binary.LittleEndian, int64(0))    // timestamp
 	binary.Write(&buf, binary.LittleEndian, uint16(0))   // event type
 	binary.Write(&buf, binary.LittleEndian, uint16(1))   // tag count = 1
 	binary.Write(&buf, binary.LittleEndian, uint32(100)) // tags len = 100 (but no data follows)
@@ -379,7 +379,7 @@ func TestDecodeRecordTruncatedTagsData(t *testing.T) {
 
 func TestDecodeRecordTruncatedDetailData(t *testing.T) {
 	var buf bytes.Buffer
-	binary.Write(&buf, binary.LittleEndian, int64(0))   // timestamp
+	binary.Write(&buf, binary.LittleEndian, int64(0))    // timestamp
 	binary.Write(&buf, binary.LittleEndian, uint16(0))   // event type
 	binary.Write(&buf, binary.LittleEndian, uint16(0))   // tag count
 	binary.Write(&buf, binary.LittleEndian, uint32(0))   // tags len
@@ -399,7 +399,7 @@ func TestDecodeRecordTruncatedTagKeyLen(t *testing.T) {
 	binary.Write(&buf, binary.LittleEndian, uint16(1)) // tag count = 1
 	binary.Write(&buf, binary.LittleEndian, uint32(1)) // tags len = 1 (too short)
 	binary.Write(&buf, binary.LittleEndian, uint32(0)) // detail len
-	buf.WriteByte(0x00)                                 // 1 byte of tags data
+	buf.WriteByte(0x00)                                // 1 byte of tags data
 
 	_, err := DecodeRecord(&buf)
 	if err != ErrTruncatedRecord {
@@ -414,11 +414,11 @@ func TestDecodeRecordTruncatedTagKey(t *testing.T) {
 	// only 2 bytes after key_len
 
 	var buf bytes.Buffer
-	binary.Write(&buf, binary.LittleEndian, int64(0))                // timestamp
-	binary.Write(&buf, binary.LittleEndian, uint16(0))               // event type
-	binary.Write(&buf, binary.LittleEndian, uint16(1))               // tag count = 1
-	binary.Write(&buf, binary.LittleEndian, uint32(len(tagsData)))   // tags len
-	binary.Write(&buf, binary.LittleEndian, uint32(0))               // detail len
+	binary.Write(&buf, binary.LittleEndian, int64(0))              // timestamp
+	binary.Write(&buf, binary.LittleEndian, uint16(0))             // event type
+	binary.Write(&buf, binary.LittleEndian, uint16(1))             // tag count = 1
+	binary.Write(&buf, binary.LittleEndian, uint32(len(tagsData))) // tags len
+	binary.Write(&buf, binary.LittleEndian, uint32(0))             // detail len
 	buf.Write(tagsData)
 
 	_, err := DecodeRecord(&buf)
@@ -431,8 +431,8 @@ func TestDecodeRecordTruncatedTagValLen(t *testing.T) {
 	// key_len=1, key="a", then only 1 byte for val_len (needs 2).
 	tagsData := make([]byte, 4)
 	binary.LittleEndian.PutUint16(tagsData[0:], 1) // key_len = 1
-	tagsData[2] = 'a'                               // key
-	tagsData[3] = 0x00                               // partial val_len
+	tagsData[2] = 'a'                              // key
+	tagsData[3] = 0x00                             // partial val_len
 
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.LittleEndian, int64(0))              // timestamp
@@ -452,8 +452,8 @@ func TestDecodeRecordTruncatedTagVal(t *testing.T) {
 	// key_len=1, key="a", val_len=10, but no val data.
 	tagsData := make([]byte, 6)
 	binary.LittleEndian.PutUint16(tagsData[0:], 1)  // key_len = 1
-	tagsData[2] = 'a'                                // key
-	binary.LittleEndian.PutUint16(tagsData[3:], 10)  // val_len = 10
+	tagsData[2] = 'a'                               // key
+	binary.LittleEndian.PutUint16(tagsData[3:], 10) // val_len = 10
 
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.LittleEndian, int64(0))              // timestamp
@@ -684,10 +684,10 @@ func TestDecodeRecordOtherErrorTagsData(t *testing.T) {
 	// Build a valid record header that claims tagsLen=10, then provide only the header.
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.LittleEndian, int64(0))   // timestamp
-	binary.Write(&buf, binary.LittleEndian, uint16(0))   // event type
-	binary.Write(&buf, binary.LittleEndian, uint16(1))   // tag count
-	binary.Write(&buf, binary.LittleEndian, uint32(10))  // tags len = 10
-	binary.Write(&buf, binary.LittleEndian, uint32(0))   // detail len
+	binary.Write(&buf, binary.LittleEndian, uint16(0))  // event type
+	binary.Write(&buf, binary.LittleEndian, uint16(1))  // tag count
+	binary.Write(&buf, binary.LittleEndian, uint32(10)) // tags len = 10
+	binary.Write(&buf, binary.LittleEndian, uint32(0))  // detail len
 	// After writing the header, provide the header bytes to limitedReader
 	// that will fail with a non-EOF error when reading tags data.
 	headerBytes := buf.Bytes()
@@ -702,10 +702,10 @@ func TestDecodeRecordOtherErrorDetailData(t *testing.T) {
 	// Build a valid record header that claims detailLen=10 with no tags.
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.LittleEndian, int64(0))   // timestamp
-	binary.Write(&buf, binary.LittleEndian, uint16(0))   // event type
-	binary.Write(&buf, binary.LittleEndian, uint16(0))   // tag count
-	binary.Write(&buf, binary.LittleEndian, uint32(0))   // tags len = 0
-	binary.Write(&buf, binary.LittleEndian, uint32(10))  // detail len = 10
+	binary.Write(&buf, binary.LittleEndian, uint16(0))  // event type
+	binary.Write(&buf, binary.LittleEndian, uint16(0))  // tag count
+	binary.Write(&buf, binary.LittleEndian, uint32(0))  // tags len = 0
+	binary.Write(&buf, binary.LittleEndian, uint32(10)) // detail len = 10
 	headerBytes := buf.Bytes()
 	lr := &limitedReader{data: headerBytes}
 	_, err := DecodeRecord(lr)
