@@ -3,6 +3,9 @@ set -euo pipefail
 
 echo "=== Scrutineer pre-push checks ==="
 
+# Ensure Go tools are on PATH
+export PATH="${PATH}:/usr/local/go/bin:$(go env GOPATH 2>/dev/null)/bin"
+
 MODULES="core connector/cli connector/http connector/ssh connector/grpc connector/browser loadtest fuzz cmd/scrutineer"
 ROOT=$(git rev-parse --show-toplevel)
 
