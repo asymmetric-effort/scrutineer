@@ -21,7 +21,8 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); text-decoration: underline; }
 nav { position: fixed; top: 0; width: 100%; background: rgba(13,17,23,0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); z-index: 100; padding: 0 2rem; }
 .nav-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 64px; }
-.logo { font-family: var(--font-mono); font-size: 1.25rem; font-weight: 700; color: var(--text); }
+.logo { font-family: var(--font-mono); font-size: 1.25rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 0.5rem; }
+.logo-icon { vertical-align: middle; }
 .logo-accent { color: var(--accent); }
 .nav-links { list-style: none; display: flex; gap: 2rem; }
 .nav-links a { color: var(--text-muted); font-size: 0.9rem; transition: color 0.2s; }

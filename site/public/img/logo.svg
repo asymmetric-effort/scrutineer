@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Eye shape -->
+  <path d="M6 32C6 32 16 14 32 14C48 14 58 32 58 32C58 32 48 50 32 50C16 50 6 32 6 32Z" stroke="#58a6ff" stroke-width="2.5" fill="none"/>
+  <!-- Iris -->
+  <circle cx="32" cy="32" r="9" stroke="#58a6ff" stroke-width="2.5" fill="none"/>
+  <!-- Pupil -->
+  <circle cx="32" cy="32" r="4" fill="#58a6ff"/>
+  <!-- Magnifying glass circle -->
+  <circle cx="44" cy="44" r="10" stroke="#3fb950" stroke-width="2.5" fill="rgba(13,17,23,0.85)"/>
+  <!-- Magnifying glass handle -->
+  <line x1="51" y1="51" x2="60" y2="60" stroke="#3fb950" stroke-width="3" stroke-linecap="round"/>
+  <!-- Glass highlight -->
+  <circle cx="41" cy="41" r="2" fill="rgba(63,185,80,0.3)"/>
+</svg>
