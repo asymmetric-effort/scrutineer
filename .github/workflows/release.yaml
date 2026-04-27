@@ -52,8 +52,112 @@ jobs:
           name: scrutineer-${{ matrix.goos }}-${{ matrix.goarch }}
           path: scrutineer-*
 
-  release:
+  package:
     needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create source tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          git archive --format=tar.gz --prefix="scrutineer-${VERSION}/" HEAD \
+            -o "artifacts/scrutineer-${VERSION}.src.tar.gz"
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rpm
+
+      - name: Build .deb packages
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          for ARCH in amd64 arm64; do
+            BINARY="artifacts/scrutineer-linux-${ARCH}"
+            if [ ! -f "$BINARY" ]; then continue; fi
+
+            DEB_ARCH="${ARCH}"
+            PKG_DIR="deb-${ARCH}"
+            mkdir -p "${PKG_DIR}/DEBIAN"
+            mkdir -p "${PKG_DIR}/usr/bin"
+            mkdir -p "${PKG_DIR}/usr/share/doc/scrutineer"
+
+            cp "$BINARY" "${PKG_DIR}/usr/bin/scrutineer"
+            chmod 755 "${PKG_DIR}/usr/bin/scrutineer"
+            cp LICENSE "${PKG_DIR}/usr/share/doc/scrutineer/copyright"
+
+            cat > "${PKG_DIR}/DEBIAN/control" <<CTRL
+          Package: scrutineer
+          Version: ${VERSION}
+          Section: devel
+          Priority: optional
+          Architecture: ${DEB_ARCH}
+          Maintainer: Asymmetric Effort, LLC <scaldwell@asymmetric-effort.com>
+          Description: Extensible test framework for CLI, API, and browser testing
+           Scrutineer is a declarative YAML-based test framework for automating
+           tests against CLI programs, REST APIs, GraphQL, gRPC, SSH, and web
+           browsers. Built in Go with zero third-party dependencies.
+          Homepage: https://scrutineer.asymmetric-effort.com
+          CTRL
+
+            dpkg-deb --build "${PKG_DIR}" "artifacts/scrutineer_${VERSION}_${DEB_ARCH}.deb"
+          done
+
+      - name: Build .rpm packages
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          for ARCH in amd64 arm64; do
+            BINARY="artifacts/scrutineer-linux-${ARCH}"
+            if [ ! -f "$BINARY" ]; then continue; fi
+
+            RPM_ARCH="${ARCH}"
+            if [ "$ARCH" = "amd64" ]; then RPM_ARCH="x86_64"; fi
+            if [ "$ARCH" = "arm64" ]; then RPM_ARCH="aarch64"; fi
+
+            mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+            cp "$BINARY" "rpmbuild/SOURCES/scrutineer"
+
+            cat > "rpmbuild/SPECS/scrutineer-${ARCH}.spec" <<SPEC
+          Name:           scrutineer
+          Version:        ${VERSION}
+          Release:        1
+          Summary:        Extensible test framework for CLI, API, and browser testing
+          License:        MIT
+          URL:            https://scrutineer.asymmetric-effort.com
+          BuildArch:      ${RPM_ARCH}
+
+          %description
+          Scrutineer is a declarative YAML-based test framework for automating
+          tests against CLI programs, REST APIs, GraphQL, gRPC, SSH, and web
+          browsers. Built in Go with zero third-party dependencies.
+
+          %install
+          mkdir -p %{buildroot}/usr/bin
+          cp %{_sourcedir}/scrutineer %{buildroot}/usr/bin/scrutineer
+          chmod 755 %{buildroot}/usr/bin/scrutineer
+
+          %files
+          /usr/bin/scrutineer
+          SPEC
+
+            rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb "rpmbuild/SPECS/scrutineer-${ARCH}.spec"
+            find rpmbuild/RPMS -name "*.rpm" -exec cp {} artifacts/ \;
+          done
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/*
+
+  release:
+    needs: package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -72,4 +176,7 @@ jobs:
           generate_release_notes: "true"
           files: |
             artifacts/scrutineer-*
+            artifacts/*.deb
+            artifacts/*.rpm
+            artifacts/*.src.tar.gz
           token: ${{ secrets.GITHUB_TOKEN }}
