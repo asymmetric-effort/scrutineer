@@ -146,7 +146,7 @@ jobs:
           /usr/bin/scrutineer
           SPEC
 
-            rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb "rpmbuild/SPECS/scrutineer-${ARCH}.spec"
+            rpmbuild --define "_topdir $(pwd)/rpmbuild" --target "${RPM_ARCH}" -bb "rpmbuild/SPECS/scrutineer-${ARCH}.spec"
             find rpmbuild/RPMS -name "*.rpm" -exec cp {} artifacts/ \;
           done
 
