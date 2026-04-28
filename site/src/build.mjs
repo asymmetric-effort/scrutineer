@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 
 const currentYear = new Date().getFullYear();
-const projectVersion = execSync('git describe --tags --always --dirty 2>/dev/null || echo "0.0.1-dev"', { encoding: 'utf-8', cwd: join(dirname(fileURLToPath(import.meta.url)), '../..') }).trim();
+const projectVersion = execSync('git describe --tags --abbrev=0 2>/dev/null || echo "0.0.1-dev"', { encoding: 'utf-8', cwd: join(dirname(fileURLToPath(import.meta.url)), '../..') }).trim();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const outDir = join(__dirname, '..', 'dist');
@@ -209,27 +209,23 @@ function CrossPlatform() {
 }
 
 function Footer() {
-    return h(SpecFooter, {
-        left: h(Fragment, null,
-            `\u00A9 2022-${currentYear} Asymmetric Effort, LLC. `,
-            h('a', { href: 'https://github.com/asymmetric-effort/scrutineer/blob/main/LICENSE' }, 'MIT License'),
-            '.'
-        ),
-        center: `Scrutineer ${projectVersion}`,
-        right: h(Fragment, null,
-            h('a', { href: 'https://github.com/asymmetric-effort/scrutineer' }, 'GitHub'),
-            ' \u00B7 ',
-            h('a', { href: 'https://github.com/asymmetric-effort/scrutineer/issues' }, 'Issues'),
-            ' \u00B7 ',
-            h('a', { href: 'https://github.com/asymmetric-effort/scrutineer/releases' }, 'Releases')
-        ),
-        borderTop: '1px solid var(--border)',
-        background: 'transparent',
-        color: 'var(--text-muted)',
-        fontSize: '0.85rem',
-        padding: '3rem 2rem',
-        ariaLabel: 'Site footer'
-    });
+    const left = h('span', null, `Scrutineer ${projectVersion}`);
+
+    const center = h('span', null,
+        `\u00A9 2022-${currentYear} `,
+        h('a', {
+            href: 'https://asymmetric-effort.com',
+            style: { color: '#3b82f6', textDecoration: 'none' }
+        }, 'Asymmetric Effort, LLC'),
+        '. MIT License.'
+    );
+
+    const right = h('a', {
+        href: 'https://github.com/asymmetric-effort/scrutineer',
+        style: { color: '#3b82f6', textDecoration: 'none' }
+    }, 'GitHub Repository');
+
+    return h(SpecFooter, { left, center, right });
 }
 
 function Page() {
