@@ -5,9 +5,13 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'tests/e2e/**'
+      - 'demos/**'
+      - '.github/workflows/pdv.yaml'
   workflow_run:
     workflows: ["Deploy GitHub Pages"]
     types: [completed]
+  workflow_dispatch:
 
 permissions:
   contents: read
