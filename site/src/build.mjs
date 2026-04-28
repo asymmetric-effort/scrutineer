@@ -1,5 +1,6 @@
 import { createElement as h, Fragment } from '@asymmetric-effort/specifyjs';
 import { renderToStaticMarkup } from '@asymmetric-effort/specifyjs/server';
+import { Footer as SpecFooter } from '@asymmetric-effort/specifyjs/components';
 import { writeFileSync, mkdirSync, cpSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -208,23 +209,27 @@ function CrossPlatform() {
 }
 
 function Footer() {
-    return h('footer', null,
-        h('p', null,
+    return h(SpecFooter, {
+        left: h(Fragment, null,
             `\u00A9 2022-${currentYear} Asymmetric Effort, LLC. `,
             h('a', { href: 'https://github.com/asymmetric-effort/scrutineer/blob/main/LICENSE' }, 'MIT License'),
             '.'
         ),
-        h('p', { style: 'margin-top: 0.5rem;' },
-            `Scrutineer ${projectVersion}`
-        ),
-        h('p', { style: 'margin-top: 0.5rem;' },
+        center: `Scrutineer ${projectVersion}`,
+        right: h(Fragment, null,
             h('a', { href: 'https://github.com/asymmetric-effort/scrutineer' }, 'GitHub'),
             ' \u00B7 ',
             h('a', { href: 'https://github.com/asymmetric-effort/scrutineer/issues' }, 'Issues'),
             ' \u00B7 ',
             h('a', { href: 'https://github.com/asymmetric-effort/scrutineer/releases' }, 'Releases')
-        )
-    );
+        ),
+        borderTop: '1px solid var(--border)',
+        background: 'transparent',
+        color: 'var(--text-muted)',
+        fontSize: '0.85rem',
+        padding: '3rem 2rem',
+        ariaLabel: 'Site footer'
+    });
 }
 
 function Page() {
