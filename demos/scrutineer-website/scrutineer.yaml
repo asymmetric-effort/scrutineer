@@ -1,0 +1,33 @@
+version: "0.0.7"
+
+tests:
+  - demos/scrutineer-website/tests/http-health.test.yaml
+  - demos/scrutineer-website/tests/http-headers.test.yaml
+  - demos/scrutineer-website/tests/http-assets.test.yaml
+  - demos/scrutineer-website/tests/html-meta.test.yaml
+  - demos/scrutineer-website/tests/browser-navigation.test.yaml
+  - demos/scrutineer-website/tests/browser-hero.test.yaml
+  - demos/scrutineer-website/tests/browser-features.test.yaml
+  - demos/scrutineer-website/tests/browser-configurations.test.yaml
+  - demos/scrutineer-website/tests/browser-install.test.yaml
+  - demos/scrutineer-website/tests/browser-cross-platform.test.yaml
+  - demos/scrutineer-website/tests/browser-footer.test.yaml
+  - demos/scrutineer-website/tests/browser-links.test.yaml
+  - demos/scrutineer-website/tests/browser-code-example.test.yaml
+
+parallelism: 2
+timeout: 30s
+
+reporters:
+  - type: ansi
+
+connectors:
+  http:
+    base_url: "https://scrutineer.asymmetric-effort.com"
+  browser:
+    browser: chromium
+    headless: true
+
+telemetry:
+  enabled: true
+  output: demos/scrutineer-website/scrutineer.log

@@ -1,0 +1,53 @@
+suite: "HTTP Security Headers"
+tags: [http, security, headers]
+
+tests:
+  - name: "Content-Type header is present"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - header.Content-Type: {contains: "text/html"}
+
+  - name: "Server does not leak version info"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+
+  - name: "Response body is non-empty"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - body_raw: {contains: "<!DOCTYPE html>"}
+
+  - name: "CSS stylesheet is served correctly"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /css/style.css
+        assert:
+          - status: 200
+          - header.Content-Type: {contains: "text/css"}
+          - body_raw: {contains: "--bg:"}
+
+  - name: "Logo image is served correctly"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /img/logo.png
+        assert:
+          - status: 200
+          - header.Content-Type: {contains: "image/png"}

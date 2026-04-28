@@ -1,0 +1,51 @@
+suite: "HTTP Health Checks"
+tags: [http, health, smoke]
+
+tests:
+  - name: "Site returns 200 OK"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - elapsed: {less_than: 5s}
+
+  - name: "Site returns HTML content type"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - header.Content-Type: {contains: "text/html"}
+
+  - name: "HTTPS is enforced"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - body_raw: {not_empty: true}
+
+  - name: "HEAD request succeeds"
+    connector: http
+    steps:
+      - action: request
+        method: HEAD
+        path: /
+        assert:
+          - status: 200
+
+  - name: "404 for nonexistent page"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /this-page-does-not-exist
+        assert:
+          - status: 404

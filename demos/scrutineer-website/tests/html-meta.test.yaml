@@ -1,0 +1,79 @@
+suite: "HTML Document Structure and Meta Tags"
+tags: [http, html, meta, seo]
+
+tests:
+  - name: "Document has correct title"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - body_raw: {contains: "<title>Scrutineer"}
+
+  - name: "Document has meta description"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - body_raw: {contains: "meta name=\"description\""}
+          - body_raw: {contains: "extensible test framework"}
+
+  - name: "Document has viewport meta tag"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - body_raw: {contains: "meta name=\"viewport\""}
+          - body_raw: {contains: "width=device-width"}
+
+  - name: "Document has charset declaration"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - body_raw: {contains: "charset=\"UTF-8\""}
+
+  - name: "Document has favicon link"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - body_raw: {contains: "rel=\"icon\""}
+          - body_raw: {contains: "img/logo.png"}
+
+  - name: "Document has stylesheet link"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - body_raw: {contains: "rel=\"stylesheet\""}
+          - body_raw: {contains: "css/style.css"}
+
+  - name: "Document is valid HTML5"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        assert:
+          - status: 200
+          - body_raw: {contains: "<!DOCTYPE html>"}
+          - body_raw: {contains: "<html lang=\"en\">"}
+          - body_raw: {contains: "</html>"}

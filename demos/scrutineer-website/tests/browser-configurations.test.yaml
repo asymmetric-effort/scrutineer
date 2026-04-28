@@ -1,0 +1,196 @@
+suite: "Supported Configurations Table"
+tags: [browser, configurations, ui]
+
+tests:
+  - name: "Section heading is Supported Configurations"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: "#protocols"
+      - action: evaluate
+        expression: "document.querySelector('#protocols h2').textContent"
+        assert:
+          - body_raw: {equals: "Supported Configurations"}
+
+  - name: "Section subtitle is present"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: get_text
+        selector: "#protocols .subtitle"
+        assert:
+          - body_raw: {contains: "Test anything that speaks a protocol"}
+
+  - name: "Table has Feature column header"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelector('.protocol-table th').textContent"
+        assert:
+          - body_raw: {equals: "Feature"}
+
+  - name: "Table has 4 column headers"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "Array.from(document.querySelectorAll('.protocol-table th')).map(th => th.textContent).join(',')"
+        assert:
+          - body_raw: {contains: "Feature"}
+          - body_raw: {contains: "Connector"}
+          - body_raw: {contains: "Status"}
+          - body_raw: {contains: "Features"}
+
+  - name: "Table has 10 rows of data"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr').length"
+        assert:
+          - body_raw: {equals: 10}
+
+  - name: "HTTP/1.1, HTTP/2 row exists with http connector"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr')[0].textContent"
+        assert:
+          - body_raw: {contains: "HTTP/1.1, HTTP/2"}
+          - body_raw: {contains: "http"}
+          - body_raw: {contains: "v0.0.1"}
+          - body_raw: {contains: "TLS 1.2/1.3"}
+
+  - name: "REST APIs row exists"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr')[1].textContent"
+        assert:
+          - body_raw: {contains: "REST APIs"}
+          - body_raw: {contains: "Bearer"}
+          - body_raw: {contains: "Basic"}
+
+  - name: "GraphQL row exists"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr')[2].textContent"
+        assert:
+          - body_raw: {contains: "GraphQL"}
+          - body_raw: {contains: "queries"}
+          - body_raw: {contains: "mutations"}
+          - body_raw: {contains: "subscriptions"}
+
+  - name: "gRPC row exists"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr')[3].textContent"
+        assert:
+          - body_raw: {contains: "gRPC"}
+          - body_raw: {contains: "Protobuf"}
+          - body_raw: {contains: "streaming"}
+
+  - name: "SSH row exists"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr')[4].textContent"
+        assert:
+          - body_raw: {contains: "SSH"}
+          - body_raw: {contains: "tunneling"}
+
+  - name: "CLI Programs row exists"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr')[5].textContent"
+        assert:
+          - body_raw: {contains: "CLI Programs"}
+          - body_raw: {contains: "stdin/stdout/stderr"}
+
+  - name: "Browser row exists"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr')[6].textContent"
+        assert:
+          - body_raw: {contains: "Chromium"}
+          - body_raw: {contains: "Firefox"}
+          - body_raw: {contains: "WebKit"}
+
+  - name: "HTTP/3 QUIC is listed as planned"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr')[7].textContent"
+        assert:
+          - body_raw: {contains: "HTTP/3"}
+          - body_raw: {contains: "QUIC"}
+          - body_raw: {contains: "planned"}
+
+  - name: "SMTP is listed as planned"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr')[8].textContent"
+        assert:
+          - body_raw: {contains: "SMTP"}
+          - body_raw: {contains: "planned"}
+
+  - name: "IMAP is listed as planned"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr')[9].textContent"
+        assert:
+          - body_raw: {contains: "IMAP"}
+          - body_raw: {contains: "planned"}
+
+  - name: "v0.0.1 items have green status styling"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.status-yes').length"
+        assert:
+          - body_raw: {greater_than: 0}
+
+  - name: "Planned items have orange status styling"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.status-planned').length"
+        assert:
+          - body_raw: {equals: 3}

@@ -1,0 +1,93 @@
+suite: "Navigation Bar"
+tags: [browser, navigation, ui]
+
+tests:
+  - name: "Nav bar is visible on page load"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: "nav"
+      - action: get_text
+        selector: "nav"
+        assert:
+          - body_raw: {contains: "scrutineer"}
+
+  - name: "Logo links to home page"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: ".logo"
+      - action: get_attribute
+        selector: ".logo"
+        attribute: "href"
+        assert:
+          - body_raw: {equals: "/"}
+
+  - name: "Logo image is displayed"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: ".logo-icon"
+      - action: get_attribute
+        selector: ".logo-icon"
+        attribute: "src"
+        assert:
+          - body_raw: {contains: "logo.png"}
+
+  - name: "Features nav link exists with correct anchor"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: ".nav-links"
+      - action: evaluate
+        expression: "document.querySelector('.nav-links a[href=\"#features\"]').textContent"
+        assert:
+          - body_raw: {equals: "Features"}
+
+  - name: "Protocols nav link exists with correct anchor"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelector('.nav-links a[href=\"#protocols\"]').textContent"
+        assert:
+          - body_raw: {equals: "Protocols"}
+
+  - name: "Install nav link exists with correct anchor"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelector('.nav-links a[href=\"#install\"]').textContent"
+        assert:
+          - body_raw: {equals: "Install"}
+
+  - name: "GitHub nav link points to correct repo"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelector('.nav-links a[href*=\"github.com\"]').href"
+        assert:
+          - body_raw: {contains: "github.com/asymmetric-effort/scrutineer"}
+
+  - name: "Nav has exactly 4 links"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.nav-links a').length"
+        assert:
+          - body_raw: {equals: 4}

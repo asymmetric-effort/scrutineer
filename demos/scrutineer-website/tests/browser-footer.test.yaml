@@ -1,0 +1,87 @@
+suite: "Footer"
+tags: [browser, footer, ui]
+
+tests:
+  - name: "Footer element exists with correct ARIA role"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: "footer"
+      - action: evaluate
+        expression: "document.querySelector('footer').getAttribute('role')"
+        assert:
+          - body_raw: {equals: "contentinfo"}
+
+  - name: "Footer has ARIA label"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelector('footer').getAttribute('aria-label')"
+        assert:
+          - body_raw: {equals: "Site footer"}
+
+  - name: "Footer left section shows project name and version"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: get_text
+        selector: "footer"
+        assert:
+          - body_raw: {matches: "Scrutineer v\\d+\\.\\d+\\.\\d+"}
+
+  - name: "Footer center section shows copyright"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: get_text
+        selector: "footer"
+        assert:
+          - body_raw: {matches: "© 2022-\\d{4}"}
+          - body_raw: {contains: "Asymmetric Effort, LLC"}
+          - body_raw: {contains: "MIT License"}
+
+  - name: "Footer has link to Asymmetric Effort website"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelector('footer a[href*=\"asymmetric-effort.com\"]').href"
+        assert:
+          - body_raw: {contains: "asymmetric-effort.com"}
+
+  - name: "Footer has GitHub Repository link"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelector('footer a[href*=\"github.com/asymmetric-effort/scrutineer\"]').textContent"
+        assert:
+          - body_raw: {equals: "GitHub Repository"}
+
+  - name: "Footer GitHub link points to correct repo"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelector('footer a[href*=\"github.com/asymmetric-effort/scrutineer\"]').href"
+        assert:
+          - body_raw: {contains: "github.com/asymmetric-effort/scrutineer"}
+
+  - name: "Footer uses three-column layout"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('footer > div > div').length"
+        assert:
+          - body_raw: {equals: 3}

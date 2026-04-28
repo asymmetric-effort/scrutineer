@@ -1,0 +1,49 @@
+suite: "Static Asset Delivery"
+tags: [http, assets]
+
+tests:
+  - name: "Index HTML loads successfully"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /index.html
+        assert:
+          - status: 200
+          - header.Content-Type: {contains: "text/html"}
+          - body_raw: {contains: "Scrutineer"}
+
+  - name: "CSS file loads and contains expected variables"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /css/style.css
+        assert:
+          - status: 200
+          - body_raw: {contains: "--bg:"}
+          - body_raw: {contains: "--accent:"}
+          - body_raw: {contains: "--font-mono:"}
+          - body_raw: {contains: ".hero"}
+          - body_raw: {contains: ".feature-card"}
+          - body_raw: {contains: ".protocol-table"}
+
+  - name: "Logo image returns valid PNG"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /img/logo.png
+        assert:
+          - status: 200
+          - header.Content-Type: {contains: "image/png"}
+
+  - name: "CNAME file exists for custom domain"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /CNAME
+        assert:
+          - status: 200
+          - body_raw: {contains: "scrutineer.asymmetric-effort.com"}

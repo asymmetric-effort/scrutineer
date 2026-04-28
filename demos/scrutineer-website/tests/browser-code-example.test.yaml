@@ -1,0 +1,111 @@
+suite: "Code Example Block"
+tags: [browser, code, ui]
+
+tests:
+  - name: "Code example block exists in hero"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: ".code-example"
+
+  - name: "Code header shows example.test.yaml"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('.code-header')[0].textContent"
+        assert:
+          - body_raw: {equals: "example.test.yaml"}
+
+  - name: "Code block contains suite definition"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('pre code')[0].textContent"
+        assert:
+          - body_raw: {contains: "suite:"}
+          - body_raw: {contains: "User API Tests"}
+
+  - name: "Code block shows HTTP POST example"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('pre code')[0].textContent"
+        assert:
+          - body_raw: {contains: "method: POST"}
+          - body_raw: {contains: "path: /users"}
+
+  - name: "Code block shows assertion syntax"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('pre code')[0].textContent"
+        assert:
+          - body_raw: {contains: "assert:"}
+          - body_raw: {contains: "status: 201"}
+          - body_raw: {contains: "equals:"}
+
+  - name: "Code block shows capture syntax"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('pre code')[0].textContent"
+        assert:
+          - body_raw: {contains: "capture:"}
+          - body_raw: {contains: "user_id: body.id"}
+
+  - name: "Code block shows variable interpolation"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('pre code')[0].textContent"
+        assert:
+          - body_raw: {contains: "${capture.user_id}"}
+
+  - name: "Code block shows timing assertion"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('pre code')[0].textContent"
+        assert:
+          - body_raw: {contains: "elapsed:"}
+          - body_raw: {contains: "less_than:"}
+
+  - name: "Code block shows tags"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('pre code')[0].textContent"
+        assert:
+          - body_raw: {contains: "tags:"}
+          - body_raw: {contains: "api"}
+          - body_raw: {contains: "smoke"}
+
+  - name: "Code block shows GET verification step"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('pre code')[0].textContent"
+        assert:
+          - body_raw: {contains: "Verify user exists"}
+          - body_raw: {contains: "method: GET"}
+          - body_raw: {contains: "status: 200"}

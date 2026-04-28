@@ -1,0 +1,64 @@
+suite: "External Links Validation"
+tags: [browser, links, ui]
+
+tests:
+  - name: "All external links use HTTPS"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "Array.from(document.querySelectorAll('a[href^=\"http\"]')).every(a => a.href.startsWith('https://'))"
+        assert:
+          - body_raw: {equals: true}
+
+  - name: "No broken anchor links on page"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "Array.from(document.querySelectorAll('a[href^=\"#\"]')).every(a => { const id = a.getAttribute('href').slice(1); return id === '' || document.getElementById(id) !== null; })"
+        assert:
+          - body_raw: {equals: true}
+
+  - name: "GitHub repo links are consistent"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "Array.from(document.querySelectorAll('a[href*=\"github.com/asymmetric-effort/scrutineer\"]')).length"
+        assert:
+          - body_raw: {greater_than: 2}
+
+  - name: "GitHub repo main link resolves"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+        headers:
+          Host: "github.com"
+        assert:
+          - status: 200
+
+  - name: "No links with empty href"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('a[href=\"\"]').length"
+        assert:
+          - body_raw: {equals: 0}
+
+  - name: "No links with javascript: href"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "document.querySelectorAll('a[href^=\"javascript:\"]').length"
+        assert:
+          - body_raw: {equals: 0}
