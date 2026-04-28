@@ -3,6 +3,10 @@ import { renderToStaticMarkup } from '@asymmetric-effort/specifyjs/server';
 import { writeFileSync, mkdirSync, cpSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
+
+const currentYear = new Date().getFullYear();
+const projectVersion = execSync('git describe --tags --always --dirty 2>/dev/null || echo "0.0.1-dev"', { encoding: 'utf-8', cwd: join(dirname(fileURLToPath(import.meta.url)), '../..') }).trim();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const outDir = join(__dirname, '..', 'dist');
@@ -206,9 +210,12 @@ function CrossPlatform() {
 function Footer() {
     return h('footer', null,
         h('p', null,
-            'Scrutineer is open source under the ',
+            `\u00A9 2022-${currentYear} Asymmetric Effort, LLC. `,
             h('a', { href: 'https://github.com/asymmetric-effort/scrutineer/blob/main/LICENSE' }, 'MIT License'),
-            '. Built with Go. Zero third-party dependencies.'
+            '.'
+        ),
+        h('p', { style: 'margin-top: 0.5rem;' },
+            `Scrutineer ${projectVersion}`
         ),
         h('p', { style: 'margin-top: 0.5rem;' },
             h('a', { href: 'https://github.com/asymmetric-effort/scrutineer' }, 'GitHub'),
