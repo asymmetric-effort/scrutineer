@@ -72,6 +72,7 @@ func cmdRun(registry *connector.Registry, args []string) int {
 		engine.WithTelemetry(telWriter),
 		engine.WithCoverage(tracker),
 		engine.WithParallelism(cfg.Parallelism),
+		engine.WithConnectorConfigs(cfg.Connectors),
 	)
 
 	// Run with signal handling

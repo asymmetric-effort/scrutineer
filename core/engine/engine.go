@@ -41,13 +41,19 @@ func WithParallelism(n int) Option {
 	return func(e *Engine) { e.parallelism = n }
 }
 
+// WithConnectorConfigs sets per-connector configuration from scrutineer.yaml.
+func WithConnectorConfigs(configs map[string]map[string]any) Option {
+	return func(e *Engine) { e.connectorConfigs = configs }
+}
+
 // Engine orchestrates test execution across suites.
 type Engine struct {
-	registry    *connector.Registry
-	reporter    reporter.Reporter
-	telemetry   telemetry.RecordWriter
-	coverage    *coverage.Tracker
-	parallelism int
+	registry         *connector.Registry
+	reporter         reporter.Reporter
+	telemetry        telemetry.RecordWriter
+	coverage         *coverage.Tracker
+	parallelism      int
+	connectorConfigs map[string]map[string]any
 }
 
 // New creates an Engine with the provided options.
@@ -139,8 +145,16 @@ func (e *Engine) runSuite(ctx context.Context, suite schema.TestSuite) SuiteResu
 		}
 		e.reporter.OnTestStart(testInfo)
 
-		// Build connector config from suite-level connectors if available.
+		// Build connector config from engine-level connector configs.
+		connName := test.Connector
 		connectorConfig := make(map[string]any)
+		if e.connectorConfigs != nil && connName != "" {
+			if cc, ok := e.connectorConfigs[connName]; ok {
+				for k, v := range cc {
+					connectorConfig[k] = v
+				}
+			}
+		}
 
 		result := runner.RunTest(ctx, tctx, test, connectorConfig)
 		sr.Results = append(sr.Results, result)
