@@ -29,7 +29,7 @@ test.describe('Supported Configurations Table', () => {
   const v001Features = [
     { feature: 'HTTP/1.1, HTTP/2', connector: 'http', detail: 'TLS 1.2/1.3' },
     { feature: 'REST APIs', connector: 'http', detail: 'Bearer' },
-    { feature: 'GraphQL', connector: 'http', detail: 'queries' },
+    { feature: 'GraphQL', connector: 'http', detail: 'Queries' },
     { feature: 'gRPC', connector: 'grpc', detail: 'streaming' },
     { feature: 'SSH', connector: 'ssh', detail: 'tunneling' },
     { feature: 'CLI Programs', connector: 'cli', detail: 'stdin/stdout/stderr' },

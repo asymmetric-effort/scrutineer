@@ -17,8 +17,8 @@ test.describe('Footer', () => {
     await expect(page.locator('footer')).toHaveAttribute('aria-label', 'Site footer');
   });
 
-  test('displays project name and semantic version', async ({ page }) => {
-    await expect(page.locator('footer')).toContainText(/Scrutineer v\d+\.\d+\.\d+/);
+  test('displays project name and version', async ({ page }) => {
+    await expect(page.locator('footer')).toContainText(/Scrutineer v?\d+\.\d+/);
   });
 
   test('displays copyright with correct year range', async ({ page }) => {

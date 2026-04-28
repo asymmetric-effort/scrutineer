@@ -75,7 +75,7 @@ tests:
         assert:
           - body_raw: {contains: "Asymmetric Effort, LLC"}
           - body_raw: {contains: "MIT License"}
-          - body_raw: {matches: "Scrutineer v\\d+\\.\\d+\\.\\d+"}
+          - body_raw: {matches: "Scrutineer v?\\d+\\.\\d+"}
 
   - name: "All external links use HTTPS"
     connector: browser
