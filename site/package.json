@@ -8,6 +8,6 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@asymmetric-effort/specifyjs": "^0.0.6"
+    "@asymmetric-effort/specifyjs": "^0.1.1"
   }
 }
