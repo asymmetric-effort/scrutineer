@@ -1,0 +1,84 @@
+name: PDV
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+  workflow_run:
+    workflows: ["Deploy GitHub Pages"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  playwright-pdv:
+    name: Playwright PDV
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: tests/e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: tests/e2e
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Run Playwright tests
+        working-directory: tests/e2e
+        env:
+          SCRUTINEER_SITE_URL: https://scrutineer.asymmetric-effort.com
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report/
+          retention-days: 14
+
+  scrutineer-demo:
+    name: Scrutineer Demo
+    needs: playwright-pdv
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Build scrutineer
+        run: |
+          cd cmd/scrutineer && go build -o ../../bin/scrutineer .
+
+      - name: Run scrutineer E2E demo
+        run: |
+          bin/scrutineer run --config demos/scrutineer-website/scrutineer.yaml
+
+      - name: Upload scrutineer telemetry
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: scrutineer-telemetry
+          path: demos/scrutineer-website/scrutineer.log
+          retention-days: 14
+
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: scrutineer-screenshot
+          path: demos/scrutineer-website/screenshot.png
+          retention-days: 14

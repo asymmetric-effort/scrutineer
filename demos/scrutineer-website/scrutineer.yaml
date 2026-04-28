@@ -1,21 +1,10 @@
-version: "0.0.7"
+version: "0.0.8"
 
 tests:
-  - demos/scrutineer-website/tests/http-health.test.yaml
-  - demos/scrutineer-website/tests/http-headers.test.yaml
-  - demos/scrutineer-website/tests/http-assets.test.yaml
-  - demos/scrutineer-website/tests/html-meta.test.yaml
-  - demos/scrutineer-website/tests/browser-navigation.test.yaml
-  - demos/scrutineer-website/tests/browser-hero.test.yaml
-  - demos/scrutineer-website/tests/browser-features.test.yaml
-  - demos/scrutineer-website/tests/browser-configurations.test.yaml
-  - demos/scrutineer-website/tests/browser-install.test.yaml
-  - demos/scrutineer-website/tests/browser-cross-platform.test.yaml
-  - demos/scrutineer-website/tests/browser-footer.test.yaml
-  - demos/scrutineer-website/tests/browser-links.test.yaml
-  - demos/scrutineer-website/tests/browser-code-example.test.yaml
+  - demos/scrutineer-website/tests/http-smoke.test.yaml
+  - demos/scrutineer-website/tests/browser-smoke.test.yaml
 
-parallelism: 2
+parallelism: 1
 timeout: 30s
 
 reporters:

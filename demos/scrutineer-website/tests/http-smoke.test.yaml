@@ -1,5 +1,5 @@
-suite: "HTTP Health Checks"
-tags: [http, health, smoke]
+suite: "HTTP Smoke Tests"
+tags: [http, smoke]
 
 tests:
   - name: "Site returns 200 OK"
@@ -11,41 +11,34 @@ tests:
         assert:
           - status: 200
           - elapsed: {less_than: 5s}
-
-  - name: "Site returns HTML content type"
-    connector: http
-    steps:
-      - action: request
-        method: GET
-        path: /
-        assert:
-          - status: 200
           - header.Content-Type: {contains: "text/html"}
+          - body_raw: {contains: "scrutineer"}
 
-  - name: "HTTPS is enforced"
+  - name: "CSS asset loads"
     connector: http
     steps:
       - action: request
         method: GET
-        path: /
+        path: /css/style.css
         assert:
           - status: 200
-          - body_raw: {not_empty: true}
+          - header.Content-Type: {contains: "text/css"}
 
-  - name: "HEAD request succeeds"
-    connector: http
-    steps:
-      - action: request
-        method: HEAD
-        path: /
-        assert:
-          - status: 200
-
-  - name: "404 for nonexistent page"
+  - name: "Logo asset loads"
     connector: http
     steps:
       - action: request
         method: GET
-        path: /this-page-does-not-exist
+        path: /img/logo.png
+        assert:
+          - status: 200
+          - header.Content-Type: {contains: "image/png"}
+
+  - name: "404 for nonexistent path"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /does-not-exist
         assert:
           - status: 404

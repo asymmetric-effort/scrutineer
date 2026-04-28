@@ -1,0 +1,98 @@
+suite: "Browser Smoke Tests"
+tags: [browser, smoke]
+
+tests:
+  - name: "Page loads and displays heading"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: ".hero h1"
+      - action: get_text
+        selector: ".hero h1"
+        assert:
+          - body_raw: {equals: "scrutineer"}
+
+  - name: "Navigation bar is visible"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: "nav"
+      - action: get_text
+        selector: "nav"
+        assert:
+          - body_raw: {contains: "scrutineer"}
+
+  - name: "Features section renders 9 cards"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: "#features"
+      - action: evaluate
+        expression: "document.querySelectorAll('.feature-card').length"
+        assert:
+          - body_raw: {equals: 9}
+
+  - name: "Configurations table renders 10 rows"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: ".protocol-table"
+      - action: evaluate
+        expression: "document.querySelectorAll('.protocol-table tbody tr').length"
+        assert:
+          - body_raw: {equals: 10}
+
+  - name: "Install section shows go install command"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: "#install"
+      - action: get_text
+        selector: ".install-block code"
+        assert:
+          - body_raw: {contains: "go install"}
+          - body_raw: {contains: "scrutineer"}
+
+  - name: "Footer displays copyright and version"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: "footer"
+      - action: get_text
+        selector: "footer"
+        assert:
+          - body_raw: {contains: "Asymmetric Effort, LLC"}
+          - body_raw: {contains: "MIT License"}
+          - body_raw: {matches: "Scrutineer v\\d+\\.\\d+\\.\\d+"}
+
+  - name: "All external links use HTTPS"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: evaluate
+        expression: "Array.from(document.querySelectorAll('a[href^=\"http\"]')).every(a => a.href.startsWith('https://'))"
+        assert:
+          - body_raw: {equals: true}
+
+  - name: "Screenshot captures full page"
+    connector: browser
+    steps:
+      - action: navigate
+        url: "https://scrutineer.asymmetric-effort.com/"
+      - action: wait_for_selector
+        selector: "footer"
+      - action: screenshot
+        path: "demos/scrutineer-website/screenshot.png"

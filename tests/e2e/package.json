@@ -1,0 +1,14 @@
+{
+  "name": "scrutineer-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "test": "npx playwright test",
+    "test:chromium": "npx playwright test --project=chromium",
+    "test:headed": "npx playwright test --headed --project=chromium",
+    "report": "npx playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}
