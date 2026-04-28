@@ -67,9 +67,9 @@ jobs:
         run: |
           cd cmd/scrutineer && go build -o ../../bin/scrutineer .
 
-      - name: Run scrutineer E2E demo
+      - name: Run scrutineer E2E demo (HTTP smoke tests)
         run: |
-          bin/scrutineer run --config demos/scrutineer-website/scrutineer.yaml
+          bin/scrutineer run --config demos/scrutineer-website/scrutineer-ci.yaml
 
       - name: Upload scrutineer telemetry
         uses: actions/upload-artifact@v7
@@ -79,10 +79,6 @@ jobs:
           path: demos/scrutineer-website/scrutineer.log
           retention-days: 14
 
-      - name: Upload screenshot
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: scrutineer-screenshot
-          path: demos/scrutineer-website/screenshot.png
-          retention-days: 14
+      # Browser demo tests (scrutineer.yaml) available for local use
+      # once `scrutineer browsers install` is implemented.
+      # CI runs HTTP-only tests via scrutineer-ci.yaml.

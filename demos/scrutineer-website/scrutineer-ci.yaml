@@ -1,0 +1,18 @@
+version: "0.0.9"
+
+tests:
+  - demos/scrutineer-website/tests/http-smoke.test.yaml
+
+parallelism: 1
+timeout: 30s
+
+reporters:
+  - type: ansi
+
+connectors:
+  http:
+    base_url: "https://scrutineer.asymmetric-effort.com"
+
+telemetry:
+  enabled: true
+  output: demos/scrutineer-website/scrutineer.log
