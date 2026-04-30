@@ -125,4 +125,6 @@ func (l *Lexer) readIdent() Token {
 
 func isDigit(r rune) bool      { return r >= '0' && r <= '9' }
 func isIdentStart(r rune) bool { return unicode.IsLetter(r) || r == '_' }
-func isIdentPart(r rune) bool  { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '.' }
+func isIdentPart(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '.'
+}

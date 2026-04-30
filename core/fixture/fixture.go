@@ -13,10 +13,10 @@ import (
 
 // Store holds fixtures and captured variables for variable interpolation.
 type Store struct {
-	fixtures     map[string]any        // from YAML fixtures section
-	captures     map[string]any        // captured during test execution
-	env          map[string]string     // environment variables
-	exprRegistry *expression.Registry  // optional expression function registry
+	fixtures     map[string]any       // from YAML fixtures section
+	captures     map[string]any       // captured during test execution
+	env          map[string]string    // environment variables
+	exprRegistry *expression.Registry // optional expression function registry
 }
 
 // NewStore creates a new Store with the given fixtures.
