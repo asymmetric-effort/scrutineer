@@ -93,11 +93,134 @@ func ParseSuite(data []byte) (*TestSuite, error) {
 		}
 	}
 
+	// Parse interactions if present.
+	if interRaw, ok := raw["interactions"]; ok {
+		suite.Interactions = parseInteractions(interRaw)
+	}
+
+	// Parse fleet provider configs if present.
+	if suite.Execution != nil && suite.Execution.Fleet != nil {
+		parseFleetProviderConfigs(raw, suite.Execution.Fleet)
+	}
+
 	if err := ValidateSuite(&suite); err != nil {
 		return nil, err
 	}
 
 	return &suite, nil
+}
+
+// parseInteractions parses the interactions key from raw YAML, extracting
+// test step parameters within each interaction's tests.
+func parseInteractions(raw any) []Interaction {
+	list, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+
+	interactions := make([]Interaction, 0, len(list))
+	for _, item := range list {
+		im, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		inter := Interaction{}
+		if v, ok := im["name"].(string); ok {
+			inter.Name = v
+		}
+		if v, ok := im["weight"].(int); ok {
+			inter.Weight = v
+		}
+		if v, ok := im["mode"].(string); ok {
+			inter.Mode = ExecutionMode(v)
+		}
+
+		// Parse tests within the interaction.
+		if testsRaw, ok := im["tests"].([]any); ok {
+			for _, t := range testsRaw {
+				tm, ok := t.(map[string]any)
+				if !ok {
+					continue
+				}
+
+				test := Test{}
+				if v, ok := tm["name"].(string); ok {
+					test.Name = v
+				}
+				if v, ok := tm["connector"].(string); ok {
+					test.Connector = v
+				}
+				if v, ok := tm["skip"].(bool); ok {
+					test.Skip = v
+				}
+				if v, ok := tm["weight"].(int); ok {
+					test.Weight = v
+				}
+				if v, ok := tm["tags"].([]any); ok {
+					for _, tag := range v {
+						if s, ok := tag.(string); ok {
+							test.Tags = append(test.Tags, s)
+						}
+					}
+				}
+				test.Steps = parseStepsFromRaw(tm, "steps")
+				inter.Tests = append(inter.Tests, test)
+			}
+		}
+
+		interactions = append(interactions, inter)
+	}
+
+	return interactions
+}
+
+// parseFleetProviderConfigs extracts provider-specific configuration from
+// raw YAML into FleetProvider.Config fields. For each provider entry, the
+// sub-map keyed by the provider name (e.g., "static", "aws_ec2") is
+// extracted into Config.
+func parseFleetProviderConfigs(raw map[string]any, fleet *FleetConfig) {
+	execRaw, ok := raw["execution"]
+	if !ok {
+		return
+	}
+	execMap, ok := execRaw.(map[string]any)
+	if !ok {
+		return
+	}
+	fleetRaw, ok := execMap["fleet"]
+	if !ok {
+		return
+	}
+	fleetMap, ok := fleetRaw.(map[string]any)
+	if !ok {
+		return
+	}
+	providersRaw, ok := fleetMap["providers"]
+	if !ok {
+		return
+	}
+	providersList, ok := providersRaw.([]any)
+	if !ok {
+		return
+	}
+
+	for i, p := range providersList {
+		if i >= len(fleet.Providers) {
+			break
+		}
+		pm, ok := p.(map[string]any)
+		if !ok {
+			continue
+		}
+		provName := fleet.Providers[i].Provider
+		if provName == "" {
+			continue
+		}
+		if cfg, ok := pm[provName].(map[string]any); ok {
+			fleet.Providers[i].Config = cfg
+		}
+	}
 }
 
 // parseStepsFromRaw extracts a slice of TestStep from a raw map at the given key.

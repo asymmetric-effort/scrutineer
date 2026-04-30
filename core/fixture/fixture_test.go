@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/scrutineer/scrutineer/core/expression"
 )
 
 func TestNewStore_WithFixtures(t *testing.T) {
@@ -396,5 +398,131 @@ func TestInterpolateMap_ErrorInSlice(t *testing.T) {
 	_, err := s.InterpolateMap(input)
 	if err == nil {
 		t.Fatal("expected error for unresolved variable in slice")
+	}
+}
+
+// --- Expression function (fn:) integration tests ---
+
+func storeWithExpressions() *Store {
+	s := NewStore(map[string]any{
+		"name": "Alice",
+		"base": "https://example.com",
+	})
+	s.SetExpressionRegistry(expression.DefaultRegistry())
+	return s
+}
+
+func TestInterpolateFnSimple(t *testing.T) {
+	s := storeWithExpressions()
+	val, err := s.Interpolate("${fn:uuid()}")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(val) != 36 {
+		t.Errorf("expected UUID (36 chars), got %q (%d chars)", val, len(val))
+	}
+}
+
+func TestInterpolateFnWithArgs(t *testing.T) {
+	s := storeWithExpressions()
+	val, err := s.Interpolate("${fn:random_string(alpha, 5, 5)}")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(val) != 5 {
+		t.Errorf("expected 5 chars, got %d: %q", len(val), val)
+	}
+}
+
+func TestInterpolateFnWithVarRef(t *testing.T) {
+	s := storeWithExpressions()
+	val, err := s.Interpolate("${fn:upper(fixture.name)}")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val != "ALICE" {
+		t.Errorf("got %q, want ALICE", val)
+	}
+}
+
+func TestInterpolateFnNested(t *testing.T) {
+	s := storeWithExpressions()
+	val, err := s.Interpolate("${fn:concat(upper(fixture.name), lower(fixture.name))}")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val != "ALICEalice" {
+		t.Errorf("got %q, want ALICEalice", val)
+	}
+}
+
+func TestInterpolateFnMixedWithVars(t *testing.T) {
+	s := storeWithExpressions()
+	val, err := s.Interpolate("${fixture.base}/${fn:uuid()}")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasPrefix(val, "https://example.com/") {
+		t.Errorf("got %q", val)
+	}
+	// The UUID part should be 36 chars after the slash
+	parts := strings.SplitN(val, "/", 4)
+	uuid := parts[len(parts)-1]
+	if len(uuid) != 36 {
+		t.Errorf("UUID part = %q (%d chars)", uuid, len(uuid))
+	}
+}
+
+func TestInterpolateFnNoRegistry(t *testing.T) {
+	s := NewStore(nil)
+	// No expression registry set
+	_, err := s.Interpolate("${fn:uuid()}")
+	if err == nil {
+		t.Fatal("expected error when no registry configured")
+	}
+	if !strings.Contains(err.Error(), "not available") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestInterpolateFnUnknownFunction(t *testing.T) {
+	s := storeWithExpressions()
+	_, err := s.Interpolate("${fn:nonexistent()}")
+	if err == nil {
+		t.Fatal("expected error for unknown function")
+	}
+}
+
+func TestInterpolateFnInMap(t *testing.T) {
+	s := storeWithExpressions()
+	input := map[string]any{
+		"email": "${fn:concat(lower(fixture.name), \"@test.com\")}",
+	}
+	result, err := s.InterpolateMap(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result["email"] != "alice@test.com" {
+		t.Errorf("email = %q", result["email"])
+	}
+}
+
+func TestInterpolateFnEvalError(t *testing.T) {
+	s := storeWithExpressions()
+	_, err := s.Interpolate("${fn:random_int(10, 1)}")
+	if err == nil {
+		t.Fatal("expected error for min > max")
+	}
+}
+
+func TestSetExpressionRegistry(t *testing.T) {
+	s := NewStore(nil)
+	if s.exprRegistry != nil {
+		t.Fatal("expected nil registry initially")
+	}
+	r := expression.NewRegistry()
+	s.SetExpressionRegistry(r)
+	if s.exprRegistry != r {
+		t.Fatal("registry not set")
 	}
 }

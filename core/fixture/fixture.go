@@ -7,13 +7,16 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/scrutineer/scrutineer/core/expression"
 )
 
 // Store holds fixtures and captured variables for variable interpolation.
 type Store struct {
-	fixtures map[string]any    // from YAML fixtures section
-	captures map[string]any    // captured during test execution
-	env      map[string]string // environment variables
+	fixtures     map[string]any        // from YAML fixtures section
+	captures     map[string]any        // captured during test execution
+	env          map[string]string     // environment variables
+	exprRegistry *expression.Registry  // optional expression function registry
 }
 
 // NewStore creates a new Store with the given fixtures.
@@ -92,9 +95,15 @@ func navigatePath(data map[string]any, path string) (any, bool) {
 	return current, true
 }
 
+// SetExpressionRegistry sets the expression function registry for fn: evaluation.
+func (s *Store) SetExpressionRegistry(r *expression.Registry) {
+	s.exprRegistry = r
+}
+
 // Interpolate replaces all ${...} expressions in a string with resolved values.
 // Returns the interpolated string and any resolution errors.
 // Escaped sequences like \${...} are treated as literals.
+// Expressions with the fn: prefix are evaluated as function calls.
 func (s *Store) Interpolate(input string) (string, error) {
 	var result strings.Builder
 	i := 0
@@ -120,6 +129,19 @@ func (s *Store) Interpolate(input string) (string, error) {
 			}
 
 			ref := input[i+2 : i+end]
+
+			// Check for fn: prefix — expression function call.
+			if strings.HasPrefix(ref, "fn:") {
+				exprStr := ref[3:] // strip "fn:" prefix
+				val, err := s.evalExpression(exprStr)
+				if err != nil {
+					return "", fmt.Errorf("expression error in ${fn:%s}: %w", exprStr, err)
+				}
+				result.WriteString(fmt.Sprintf("%v", val))
+				i += end + 1
+				continue
+			}
+
 			val, ok := s.Resolve(ref)
 			if !ok {
 				return "", fmt.Errorf("unresolved variable: %s", ref)
@@ -135,6 +157,14 @@ func (s *Store) Interpolate(input string) (string, error) {
 	}
 
 	return result.String(), nil
+}
+
+// evalExpression parses and evaluates an expression function string.
+func (s *Store) evalExpression(input string) (any, error) {
+	if s.exprRegistry == nil {
+		return nil, fmt.Errorf("expression functions not available (no registry configured)")
+	}
+	return expression.EvalString(input, s.exprRegistry, s)
 }
 
 // InterpolateMap recursively interpolates all string values in a map.

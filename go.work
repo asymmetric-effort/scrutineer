@@ -10,4 +10,5 @@ use (
 	./core
 	./fuzz
 	./loadtest
+	./provider/static
 )

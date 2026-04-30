@@ -8,6 +8,7 @@ import (
 	"github.com/scrutineer/scrutineer/core/connector"
 	"github.com/scrutineer/scrutineer/core/coverage"
 	"github.com/scrutineer/scrutineer/core/exitcode"
+	"github.com/scrutineer/scrutineer/core/expression"
 	"github.com/scrutineer/scrutineer/core/reporter"
 	"github.com/scrutineer/scrutineer/core/schema"
 	"github.com/scrutineer/scrutineer/core/telemetry"
@@ -46,6 +47,11 @@ func WithConnectorConfigs(configs map[string]map[string]any) Option {
 	return func(e *Engine) { e.connectorConfigs = configs }
 }
 
+// WithExpressionRegistry sets the expression function registry for fn: evaluation.
+func WithExpressionRegistry(r *expression.Registry) Option {
+	return func(e *Engine) { e.exprRegistry = r }
+}
+
 // Engine orchestrates test execution across suites.
 type Engine struct {
 	registry         *connector.Registry
@@ -54,6 +60,7 @@ type Engine struct {
 	coverage         *coverage.Tracker
 	parallelism      int
 	connectorConfigs map[string]map[string]any
+	exprRegistry     *expression.Registry
 }
 
 // New creates an Engine with the provided options.
@@ -83,8 +90,19 @@ func (e *Engine) Run(ctx context.Context, suites []schema.TestSuite) []SuiteResu
 	return results
 }
 
-// runSuite executes a single test suite.
+// runSuite executes a single test suite, choosing the execution path
+// based on whether an Execution block or Interactions are present.
 func (e *Engine) runSuite(ctx context.Context, suite schema.TestSuite) SuiteResult {
+	if suite.Execution == nil && len(suite.Interactions) == 0 {
+		return e.runSuiteSimple(ctx, suite)
+	}
+	return e.runSuiteWithExecution(ctx, suite)
+}
+
+// runSuiteSimple is the original sequential single-pass execution path.
+// It is used when no Execution block or Interactions are present,
+// preserving backward compatibility.
+func (e *Engine) runSuiteSimple(ctx context.Context, suite schema.TestSuite) SuiteResult {
 	start := time.Now()
 
 	info := reporter.SuiteInfo{
@@ -137,6 +155,9 @@ func (e *Engine) runSuite(ctx context.Context, suite schema.TestSuite) SuiteResu
 		}
 
 		tctx := NewTestContext(suite.Suite, test.Name, suite.Fixtures)
+		if e.exprRegistry != nil {
+			tctx.Store.SetExpressionRegistry(e.exprRegistry)
+		}
 
 		testInfo := reporter.TestInfo{
 			Name:  test.Name,
@@ -182,6 +203,200 @@ func (e *Engine) runSuite(ctx context.Context, suite schema.TestSuite) SuiteResu
 	}
 
 	return sr
+}
+
+// runSuiteWithExecution handles suites that have an Execution block
+// and/or Interactions. It uses dispatchers for mode-based ordering
+// and a loop controller for repeat/duration.
+func (e *Engine) runSuiteWithExecution(ctx context.Context, suite schema.TestSuite) SuiteResult {
+	start := time.Now()
+
+	exec := suite.Execution
+	if exec == nil {
+		exec = &schema.Execution{Mode: schema.ModeSequential, Repeat: 1}
+	}
+
+	// Normalize: if suite has Tests (not Interactions), wrap them in
+	// a single unnamed sequential interaction.
+	interactions := suite.Interactions
+	if len(interactions) == 0 && len(suite.Tests) > 0 {
+		interactions = []schema.Interaction{
+			{
+				Name:  suite.Suite,
+				Mode:  schema.ModeSequential,
+				Tests: suite.Tests,
+			},
+		}
+	}
+
+	// Count total tests for reporting.
+	totalTests := 0
+	for _, inter := range interactions {
+		totalTests += len(inter.Tests)
+	}
+
+	info := reporter.SuiteInfo{
+		Name:      suite.Suite,
+		TestCount: totalTests,
+	}
+	e.reporter.OnSuiteStart(info)
+
+	if e.telemetry != nil {
+		_ = e.telemetry.Write(telemetry.Record{
+			Timestamp: telemetry.NowNano(),
+			EventType: telemetry.SuiteStart,
+			Tags:      map[string]string{"suite": suite.Suite},
+		})
+	}
+
+	runner := NewRunner(e.registry, e.reporter, e.telemetry, e.coverage)
+
+	sr := SuiteResult{
+		Suite:   suite.Suite,
+		Results: make([]reporter.TestResult, 0),
+	}
+	var mu sync.Mutex
+
+	// Parse duration and interval.
+	duration := parseDuration(exec.Duration)
+	interval := parseDuration(exec.Interval)
+	repeat := exec.Repeat
+	if repeat == 0 && duration == 0 {
+		repeat = 1 // safety fallback
+	}
+
+	// Build interaction weights for weighted dispatcher.
+	interWeights := make([]int, len(interactions))
+	for i, inter := range interactions {
+		w := inter.Weight
+		if w <= 0 {
+			w = 1
+		}
+		interWeights[i] = w
+	}
+
+	// Outer dispatcher: dispatches interactions.
+	outerDispatcher := NewDispatcher(exec.Mode, exec.Concurrency, interWeights)
+
+	// For weighted mode, each pass selects one interaction by probability.
+	// For all other modes, each pass dispatches all interactions.
+	dispatchCount := len(interactions)
+	if exec.Mode == schema.ModeWeighted {
+		dispatchCount = 1
+	}
+
+	lc := NewLoopController(repeat, duration, interval)
+	lc.Run(ctx, func(passCtx context.Context, passNum int) {
+		outerDispatcher.Dispatch(passCtx, dispatchCount, func(dCtx context.Context, interIdx int) {
+			inter := interactions[interIdx]
+			e.runInteraction(dCtx, runner, inter, suite, passNum, &sr, &mu)
+		})
+	})
+
+	sr.summarise()
+	sr.Elapsed = time.Since(start)
+
+	summary := reporter.SuiteSummary{
+		Passed:  sr.Passed,
+		Failed:  sr.Failed,
+		Skipped: sr.Skipped,
+		Elapsed: sr.Elapsed,
+	}
+	e.reporter.OnSuiteEnd(info, summary)
+
+	if e.telemetry != nil {
+		_ = e.telemetry.Write(telemetry.Record{
+			Timestamp: telemetry.NowNano(),
+			EventType: telemetry.SuiteEnd,
+			Tags:      map[string]string{"suite": suite.Suite},
+		})
+	}
+
+	return sr
+}
+
+// runInteraction executes all tests within an interaction using the
+// interaction's own dispatcher mode.
+func (e *Engine) runInteraction(
+	ctx context.Context,
+	runner *Runner,
+	inter schema.Interaction,
+	suite schema.TestSuite,
+	passNum int,
+	sr *SuiteResult,
+	mu *sync.Mutex,
+) {
+	// Each interaction gets its own TestContext so captures are isolated
+	// between interactions but shared within one interaction.
+	tctx := NewTestContext(suite.Suite, "", suite.Fixtures)
+	tctx.Interaction = inter.Name
+	tctx.PassNum = passNum
+	if e.exprRegistry != nil {
+		tctx.Store.SetExpressionRegistry(e.exprRegistry)
+	}
+
+	// Build test weights for weighted dispatcher.
+	testWeights := make([]int, len(inter.Tests))
+	for i, test := range inter.Tests {
+		w := test.Weight
+		if w <= 0 {
+			w = 1
+		}
+		testWeights[i] = w
+	}
+
+	mode := inter.Mode
+	if mode == "" {
+		mode = schema.ModeSequential
+	}
+
+	innerDispatcher := NewDispatcher(mode, 0, testWeights)
+	innerDispatcher.Dispatch(ctx, len(inter.Tests), func(tCtx context.Context, testIdx int) {
+		test := inter.Tests[testIdx]
+
+		if test.Skip {
+			mu.Lock()
+			sr.Skipped++
+			mu.Unlock()
+			return
+		}
+
+		tctx.Test = test.Name
+
+		testInfo := reporter.TestInfo{
+			Name:  test.Name,
+			Suite: suite.Suite,
+			Tags:  test.Tags,
+		}
+		e.reporter.OnTestStart(testInfo)
+
+		connName := test.Connector
+		connectorConfig := make(map[string]any)
+		if e.connectorConfigs != nil && connName != "" {
+			if cc, ok := e.connectorConfigs[connName]; ok {
+				for k, v := range cc {
+					connectorConfig[k] = v
+				}
+			}
+		}
+
+		result := runner.RunTest(tCtx, tctx, test, connectorConfig)
+
+		mu.Lock()
+		sr.Results = append(sr.Results, result)
+		mu.Unlock()
+
+		e.reporter.OnTestEnd(testInfo, result)
+	})
+}
+
+// parseDuration parses a duration string, returning 0 for empty strings.
+func parseDuration(s string) time.Duration {
+	if s == "" {
+		return 0
+	}
+	d, _ := time.ParseDuration(s)
+	return d
 }
 
 // ExitCode returns the appropriate exit code based on results.

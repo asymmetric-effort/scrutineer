@@ -1,13 +1,64 @@
 package schema
 
+// ExecutionMode enumerates how tests or interactions are dispatched.
+type ExecutionMode string
+
+const (
+	ModeSequential ExecutionMode = "sequential"
+	ModeRandom     ExecutionMode = "random"
+	ModeConcurrent ExecutionMode = "concurrent"
+	ModeWeighted   ExecutionMode = "weighted"
+)
+
+// validExecutionModes is the set of recognised execution modes.
+var validExecutionModes = map[ExecutionMode]bool{
+	ModeSequential: true,
+	ModeRandom:     true,
+	ModeConcurrent: true,
+	ModeWeighted:   true,
+}
+
+// Execution configures how tests or interactions are dispatched within a suite.
+type Execution struct {
+	Mode        ExecutionMode `yaml:"mode"`
+	Concurrency int           `yaml:"concurrency"`
+	Duration    string        `yaml:"duration"`
+	Repeat      int           `yaml:"repeat"`
+	Interval    string        `yaml:"interval"`
+	Fleet       *FleetConfig  `yaml:"fleet"`
+}
+
+// Interaction groups tests into a logical collection (e.g. a user journey).
+type Interaction struct {
+	Name   string        `yaml:"name"`
+	Weight int           `yaml:"weight"`
+	Mode   ExecutionMode `yaml:"mode"`
+	Tests  []Test        `yaml:"tests"`
+}
+
+// FleetConfig configures distributed test execution providers.
+type FleetConfig struct {
+	Providers []FleetProvider `yaml:"providers"`
+}
+
+// FleetProvider configures a single fleet provider instance.
+type FleetProvider struct {
+	Provider string         `yaml:"provider"`
+	Weight   int            `yaml:"weight"`
+	TTL      int            `yaml:"ttl"`
+	Config   map[string]any `yaml:"-"`
+}
+
 // TestSuite represents a complete test file.
 type TestSuite struct {
-	Suite    string         `yaml:"suite"`
-	Tags     []string       `yaml:"tags"`
-	Setup    []TestStep     `yaml:"setup"`
-	Teardown []TestStep     `yaml:"teardown"`
-	Fixtures map[string]any `yaml:"fixtures"`
-	Tests    []Test         `yaml:"tests"`
+	Suite        string         `yaml:"suite"`
+	Tags         []string       `yaml:"tags"`
+	Setup        []TestStep     `yaml:"setup"`
+	Teardown     []TestStep     `yaml:"teardown"`
+	Fixtures     map[string]any `yaml:"fixtures"`
+	Tests        []Test         `yaml:"tests"`
+	Execution    *Execution     `yaml:"execution"`
+	Interactions []Interaction  `yaml:"interactions"`
 }
 
 // Test represents a single test case.
@@ -16,6 +67,7 @@ type Test struct {
 	Connector string     `yaml:"connector"`
 	Tags      []string   `yaml:"tags"`
 	Skip      bool       `yaml:"skip"`
+	Weight    int        `yaml:"weight"`
 	Steps     []TestStep `yaml:"steps"`
 }
 

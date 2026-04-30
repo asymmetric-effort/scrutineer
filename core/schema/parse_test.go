@@ -195,7 +195,7 @@ tests:
 			yaml: `
 suite: "S"
 `,
-			want: "at least one test is required",
+			want: "at least one test or interaction is required",
 		},
 		{
 			name: "test with no name",
@@ -745,4 +745,664 @@ func searchString(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// --- Execution, Interaction, Fleet parsing tests ---
+
+func TestParseSuiteWithExecution(t *testing.T) {
+	data := []byte(`
+suite: "Load Test"
+execution:
+  mode: concurrent
+  concurrency: 50
+  duration: "5m"
+  repeat: 3
+  interval: "1s"
+tests:
+  - name: "t1"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /api/health
+`)
+	suite, err := ParseSuite(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if suite.Execution == nil {
+		t.Fatal("expected execution block")
+	}
+	if suite.Execution.Mode != ModeConcurrent {
+		t.Errorf("mode = %q, want %q", suite.Execution.Mode, ModeConcurrent)
+	}
+	if suite.Execution.Concurrency != 50 {
+		t.Errorf("concurrency = %d, want 50", suite.Execution.Concurrency)
+	}
+	if suite.Execution.Duration != "5m" {
+		t.Errorf("duration = %q, want %q", suite.Execution.Duration, "5m")
+	}
+	if suite.Execution.Repeat != 3 {
+		t.Errorf("repeat = %d, want 3", suite.Execution.Repeat)
+	}
+	if suite.Execution.Interval != "1s" {
+		t.Errorf("interval = %q, want %q", suite.Execution.Interval, "1s")
+	}
+}
+
+func TestParseSuiteWithInteractions(t *testing.T) {
+	data := []byte(`
+suite: "User Journeys"
+interactions:
+  - name: "Browse session"
+    weight: 7
+    mode: sequential
+    tests:
+      - name: "Login"
+        connector: http
+        steps:
+          - action: request
+            method: POST
+            path: /login
+      - name: "Browse"
+        connector: http
+        steps:
+          - action: request
+            method: GET
+            path: /catalog
+  - name: "Admin"
+    weight: 3
+    mode: random
+    tests:
+      - name: "Report"
+        connector: http
+        steps:
+          - action: request
+            method: GET
+            path: /admin/reports
+`)
+	suite, err := ParseSuite(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(suite.Interactions) != 2 {
+		t.Fatalf("expected 2 interactions, got %d", len(suite.Interactions))
+	}
+	inter := suite.Interactions[0]
+	if inter.Name != "Browse session" {
+		t.Errorf("interaction name = %q", inter.Name)
+	}
+	if inter.Weight != 7 {
+		t.Errorf("interaction weight = %d, want 7", inter.Weight)
+	}
+	if inter.Mode != ModeSequential {
+		t.Errorf("interaction mode = %q, want sequential", inter.Mode)
+	}
+	if len(inter.Tests) != 2 {
+		t.Fatalf("expected 2 tests in interaction, got %d", len(inter.Tests))
+	}
+	if inter.Tests[0].Name != "Login" {
+		t.Errorf("first test name = %q", inter.Tests[0].Name)
+	}
+	if len(inter.Tests[0].Steps) != 1 {
+		t.Errorf("expected 1 step in Login, got %d", len(inter.Tests[0].Steps))
+	}
+	if inter.Tests[0].Steps[0].Action != "request" {
+		t.Errorf("step action = %q, want request", inter.Tests[0].Steps[0].Action)
+	}
+	if inter.Tests[0].Steps[0].Parameters["method"] != "POST" {
+		t.Errorf("step method = %v, want POST", inter.Tests[0].Steps[0].Parameters["method"])
+	}
+
+	admin := suite.Interactions[1]
+	if admin.Mode != ModeRandom {
+		t.Errorf("admin mode = %q, want random", admin.Mode)
+	}
+}
+
+func TestParseSuiteWithFleetConfig(t *testing.T) {
+	data := []byte(`
+suite: "Fleet Test"
+execution:
+  mode: sequential
+  repeat: 1
+  fleet:
+    providers:
+      - provider: static
+        weight: 60
+        ttl: 0
+        static:
+          nodes:
+            - "10.0.1.10"
+            - "10.0.1.11"
+      - provider: aws_ec2
+        weight: 40
+        ttl: 15
+        aws_ec2:
+          region: us-east-1
+          instance_type: t3.medium
+tests:
+  - name: "t1"
+    connector: http
+    steps:
+      - action: request
+`)
+	suite, err := ParseSuite(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if suite.Execution == nil || suite.Execution.Fleet == nil {
+		t.Fatal("expected fleet config")
+	}
+	fleet := suite.Execution.Fleet
+	if len(fleet.Providers) != 2 {
+		t.Fatalf("expected 2 providers, got %d", len(fleet.Providers))
+	}
+	if fleet.Providers[0].Provider != "static" {
+		t.Errorf("provider[0] = %q", fleet.Providers[0].Provider)
+	}
+	if fleet.Providers[0].Weight != 60 {
+		t.Errorf("provider[0] weight = %d, want 60", fleet.Providers[0].Weight)
+	}
+	if fleet.Providers[0].TTL != 0 {
+		t.Errorf("provider[0] ttl = %d, want 0", fleet.Providers[0].TTL)
+	}
+	// Check provider-specific config was extracted.
+	cfg := fleet.Providers[0].Config
+	if cfg == nil {
+		t.Fatal("expected static provider config")
+	}
+	nodes, ok := cfg["nodes"].([]any)
+	if !ok {
+		t.Fatalf("expected nodes list, got %T", cfg["nodes"])
+	}
+	if len(nodes) != 2 {
+		t.Errorf("expected 2 nodes, got %d", len(nodes))
+	}
+
+	awsCfg := fleet.Providers[1].Config
+	if awsCfg == nil {
+		t.Fatal("expected aws_ec2 provider config")
+	}
+	if awsCfg["region"] != "us-east-1" {
+		t.Errorf("region = %v, want us-east-1", awsCfg["region"])
+	}
+	if fleet.Providers[1].TTL != 15 {
+		t.Errorf("provider[1] ttl = %d, want 15", fleet.Providers[1].TTL)
+	}
+}
+
+func TestParseSuiteTestWeight(t *testing.T) {
+	data := []byte(`
+suite: "Weighted"
+execution:
+  mode: weighted
+  repeat: 10
+tests:
+  - name: "heavy"
+    weight: 8
+    steps:
+      - action: do
+  - name: "light"
+    weight: 2
+    steps:
+      - action: do
+`)
+	suite, err := ParseSuite(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if suite.Tests[0].Weight != 8 {
+		t.Errorf("test[0] weight = %d, want 8", suite.Tests[0].Weight)
+	}
+	if suite.Tests[1].Weight != 2 {
+		t.Errorf("test[1] weight = %d, want 2", suite.Tests[1].Weight)
+	}
+}
+
+func TestParseSuiteInteractionWithTags(t *testing.T) {
+	data := []byte(`
+suite: "Tagged"
+interactions:
+  - name: "I1"
+    tests:
+      - name: "t1"
+        connector: cli
+        tags:
+          - smoke
+          - api
+        skip: true
+        steps:
+          - action: run
+`)
+	suite, err := ParseSuite(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	test := suite.Interactions[0].Tests[0]
+	if test.Connector != "cli" {
+		t.Errorf("connector = %q", test.Connector)
+	}
+	if !test.Skip {
+		t.Error("expected skip=true")
+	}
+	if len(test.Tags) != 2 {
+		t.Errorf("expected 2 tags, got %d", len(test.Tags))
+	}
+}
+
+func TestParseSuiteFleetNoProviderConfig(t *testing.T) {
+	// Provider entry without a matching provider-specific sub-map.
+	data := []byte(`
+suite: "Fleet"
+execution:
+  mode: sequential
+  repeat: 1
+  fleet:
+    providers:
+      - provider: static
+        weight: 100
+tests:
+  - name: "t1"
+    steps:
+      - action: do
+`)
+	suite, err := ParseSuite(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if suite.Execution.Fleet.Providers[0].Config != nil {
+		t.Error("expected nil config when no provider-specific sub-map")
+	}
+}
+
+func TestParseSuiteNoFleetInExecution(t *testing.T) {
+	data := []byte(`
+suite: "Simple Exec"
+execution:
+  mode: random
+  repeat: 1
+tests:
+  - name: "t1"
+    steps:
+      - action: do
+`)
+	suite, err := ParseSuite(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if suite.Execution.Fleet != nil {
+		t.Error("expected nil fleet")
+	}
+}
+
+func TestParseSuiteBackwardCompatible(t *testing.T) {
+	data := []byte(`
+suite: "Simple"
+tests:
+  - name: "basic"
+    connector: http
+    steps:
+      - action: request
+        method: GET
+        path: /
+`)
+	suite, err := ParseSuite(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if suite.Execution != nil {
+		t.Error("expected nil execution for simple suite")
+	}
+	if len(suite.Interactions) != 0 {
+		t.Error("expected no interactions for simple suite")
+	}
+	if len(suite.Tests) != 1 {
+		t.Fatalf("expected 1 test, got %d", len(suite.Tests))
+	}
+}
+
+// --- parseInteractions malformed input tests ---
+
+func TestParseInteractionsNotSlice(t *testing.T) {
+	// interactions is not a []any — should return nil.
+	result := parseInteractions("not a list")
+	if result != nil {
+		t.Errorf("expected nil for non-slice interactions, got %v", result)
+	}
+}
+
+func TestParseInteractionsNonMapItem(t *testing.T) {
+	// interactions list contains non-map items — should skip them.
+	result := parseInteractions([]any{"string_item", 42})
+	if len(result) != 0 {
+		t.Errorf("expected 0 interactions for non-map items, got %d", len(result))
+	}
+}
+
+func TestParseInteractionsNonStringName(t *testing.T) {
+	result := parseInteractions([]any{
+		map[string]any{
+			"name": 123, // not a string
+			"tests": []any{
+				map[string]any{
+					"name":  "t1",
+					"steps": []any{map[string]any{"action": "do"}},
+				},
+			},
+		},
+	})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 interaction, got %d", len(result))
+	}
+	if result[0].Name != "" {
+		t.Errorf("expected empty name for non-string, got %q", result[0].Name)
+	}
+}
+
+func TestParseInteractionsNonIntWeight(t *testing.T) {
+	result := parseInteractions([]any{
+		map[string]any{
+			"name":   "i1",
+			"weight": "not_int",
+			"tests": []any{
+				map[string]any{
+					"name":  "t1",
+					"steps": []any{map[string]any{"action": "do"}},
+				},
+			},
+		},
+	})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 interaction, got %d", len(result))
+	}
+	if result[0].Weight != 0 {
+		t.Errorf("expected 0 weight for non-int, got %d", result[0].Weight)
+	}
+}
+
+func TestParseInteractionsNonStringMode(t *testing.T) {
+	result := parseInteractions([]any{
+		map[string]any{
+			"name": "i1",
+			"mode": 42, // not a string
+			"tests": []any{
+				map[string]any{
+					"name":  "t1",
+					"steps": []any{map[string]any{"action": "do"}},
+				},
+			},
+		},
+	})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 interaction, got %d", len(result))
+	}
+	if result[0].Mode != "" {
+		t.Errorf("expected empty mode for non-string, got %q", result[0].Mode)
+	}
+}
+
+func TestParseInteractionsTestsNotSlice(t *testing.T) {
+	result := parseInteractions([]any{
+		map[string]any{
+			"name":  "i1",
+			"tests": "not_a_list",
+		},
+	})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 interaction, got %d", len(result))
+	}
+	if len(result[0].Tests) != 0 {
+		t.Errorf("expected 0 tests for non-list tests, got %d", len(result[0].Tests))
+	}
+}
+
+func TestParseInteractionsTestNonMap(t *testing.T) {
+	result := parseInteractions([]any{
+		map[string]any{
+			"name":  "i1",
+			"tests": []any{"not_a_map", 42},
+		},
+	})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 interaction, got %d", len(result))
+	}
+	if len(result[0].Tests) != 0 {
+		t.Errorf("expected 0 tests for non-map test items, got %d", len(result[0].Tests))
+	}
+}
+
+func TestParseInteractionsTestFieldsNonTypes(t *testing.T) {
+	result := parseInteractions([]any{
+		map[string]any{
+			"name": "i1",
+			"tests": []any{
+				map[string]any{
+					"name":      42,    // not string
+					"connector": 42,    // not string
+					"skip":      "yes", // not bool
+					"weight":    "w",   // not int
+					"tags":      "t",   // not []any
+					"steps":     []any{map[string]any{"action": "do"}},
+				},
+			},
+		},
+	})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 interaction, got %d", len(result))
+	}
+	test := result[0].Tests[0]
+	if test.Name != "" {
+		t.Errorf("expected empty name for non-string, got %q", test.Name)
+	}
+	if test.Connector != "" {
+		t.Errorf("expected empty connector for non-string, got %q", test.Connector)
+	}
+	if test.Skip {
+		t.Error("expected skip=false for non-bool")
+	}
+	if test.Weight != 0 {
+		t.Errorf("expected 0 weight for non-int, got %d", test.Weight)
+	}
+	if len(test.Tags) != 0 {
+		t.Errorf("expected 0 tags for non-slice, got %d", len(test.Tags))
+	}
+}
+
+func TestParseInteractionsTestWeightInt(t *testing.T) {
+	result := parseInteractions([]any{
+		map[string]any{
+			"name": "i1",
+			"tests": []any{
+				map[string]any{
+					"name":   "t1",
+					"weight": 5,
+					"steps":  []any{map[string]any{"action": "do"}},
+				},
+			},
+		},
+	})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 interaction, got %d", len(result))
+	}
+	if result[0].Tests[0].Weight != 5 {
+		t.Errorf("expected weight 5, got %d", result[0].Tests[0].Weight)
+	}
+}
+
+func TestParseInteractionsTagNonString(t *testing.T) {
+	result := parseInteractions([]any{
+		map[string]any{
+			"name": "i1",
+			"tests": []any{
+				map[string]any{
+					"name":  "t1",
+					"tags":  []any{42, true}, // non-string tags
+					"steps": []any{map[string]any{"action": "do"}},
+				},
+			},
+		},
+	})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 interaction, got %d", len(result))
+	}
+	if len(result[0].Tests[0].Tags) != 0 {
+		t.Errorf("expected 0 tags for non-string tag items, got %d", len(result[0].Tests[0].Tags))
+	}
+}
+
+// --- parseFleetProviderConfigs malformed input tests ---
+
+func TestParseFleetProviderConfigsNoExecution(t *testing.T) {
+	fleet := &FleetConfig{
+		Providers: []FleetProvider{{Provider: "static", Weight: 100}},
+	}
+	raw := map[string]any{"suite": "S"}
+	parseFleetProviderConfigs(raw, fleet)
+	if fleet.Providers[0].Config != nil {
+		t.Error("expected nil config when execution key is missing")
+	}
+}
+
+func TestParseFleetProviderConfigsExecutionNotMap(t *testing.T) {
+	fleet := &FleetConfig{
+		Providers: []FleetProvider{{Provider: "static", Weight: 100}},
+	}
+	raw := map[string]any{"execution": "not_a_map"}
+	parseFleetProviderConfigs(raw, fleet)
+	if fleet.Providers[0].Config != nil {
+		t.Error("expected nil config when execution is not a map")
+	}
+}
+
+func TestParseFleetProviderConfigsNoFleetKey(t *testing.T) {
+	fleet := &FleetConfig{
+		Providers: []FleetProvider{{Provider: "static", Weight: 100}},
+	}
+	raw := map[string]any{
+		"execution": map[string]any{"mode": "sequential"},
+	}
+	parseFleetProviderConfigs(raw, fleet)
+	if fleet.Providers[0].Config != nil {
+		t.Error("expected nil config when fleet key is missing")
+	}
+}
+
+func TestParseFleetProviderConfigsFleetNotMap(t *testing.T) {
+	fleet := &FleetConfig{
+		Providers: []FleetProvider{{Provider: "static", Weight: 100}},
+	}
+	raw := map[string]any{
+		"execution": map[string]any{"fleet": "not_a_map"},
+	}
+	parseFleetProviderConfigs(raw, fleet)
+	if fleet.Providers[0].Config != nil {
+		t.Error("expected nil config when fleet is not a map")
+	}
+}
+
+func TestParseFleetProviderConfigsNoProvidersKey(t *testing.T) {
+	fleet := &FleetConfig{
+		Providers: []FleetProvider{{Provider: "static", Weight: 100}},
+	}
+	raw := map[string]any{
+		"execution": map[string]any{
+			"fleet": map[string]any{"other": "value"},
+		},
+	}
+	parseFleetProviderConfigs(raw, fleet)
+	if fleet.Providers[0].Config != nil {
+		t.Error("expected nil config when providers key is missing")
+	}
+}
+
+func TestParseFleetProviderConfigsProvidersNotSlice(t *testing.T) {
+	fleet := &FleetConfig{
+		Providers: []FleetProvider{{Provider: "static", Weight: 100}},
+	}
+	raw := map[string]any{
+		"execution": map[string]any{
+			"fleet": map[string]any{"providers": "not_a_list"},
+		},
+	}
+	parseFleetProviderConfigs(raw, fleet)
+	if fleet.Providers[0].Config != nil {
+		t.Error("expected nil config when providers is not a slice")
+	}
+}
+
+func TestParseFleetProviderConfigsProviderItemNotMap(t *testing.T) {
+	fleet := &FleetConfig{
+		Providers: []FleetProvider{{Provider: "static", Weight: 100}},
+	}
+	raw := map[string]any{
+		"execution": map[string]any{
+			"fleet": map[string]any{
+				"providers": []any{"not_a_map"},
+			},
+		},
+	}
+	parseFleetProviderConfigs(raw, fleet)
+	if fleet.Providers[0].Config != nil {
+		t.Error("expected nil config when provider item is not a map")
+	}
+}
+
+func TestParseFleetProviderConfigsEmptyProviderName(t *testing.T) {
+	fleet := &FleetConfig{
+		Providers: []FleetProvider{{Provider: "", Weight: 100}},
+	}
+	raw := map[string]any{
+		"execution": map[string]any{
+			"fleet": map[string]any{
+				"providers": []any{
+					map[string]any{"something": "value"},
+				},
+			},
+		},
+	}
+	parseFleetProviderConfigs(raw, fleet)
+	if fleet.Providers[0].Config != nil {
+		t.Error("expected nil config when provider name is empty")
+	}
+}
+
+func TestParseFleetProviderConfigsProviderConfigNotMap(t *testing.T) {
+	fleet := &FleetConfig{
+		Providers: []FleetProvider{{Provider: "static", Weight: 100}},
+	}
+	raw := map[string]any{
+		"execution": map[string]any{
+			"fleet": map[string]any{
+				"providers": []any{
+					map[string]any{"static": "not_a_map"},
+				},
+			},
+		},
+	}
+	parseFleetProviderConfigs(raw, fleet)
+	if fleet.Providers[0].Config != nil {
+		t.Error("expected nil config when provider config is not a map")
+	}
+}
+
+func TestParseFleetProviderConfigsMoreRawThanFleet(t *testing.T) {
+	// Raw has more providers than fleet.Providers — should stop at fleet length.
+	fleet := &FleetConfig{
+		Providers: []FleetProvider{{Provider: "static", Weight: 100}},
+	}
+	raw := map[string]any{
+		"execution": map[string]any{
+			"fleet": map[string]any{
+				"providers": []any{
+					map[string]any{"static": map[string]any{"nodes": []any{"10.0.0.1"}}},
+					map[string]any{"aws_ec2": map[string]any{"region": "us-east-1"}},
+				},
+			},
+		},
+	}
+	parseFleetProviderConfigs(raw, fleet)
+	if fleet.Providers[0].Config == nil {
+		t.Error("expected config for first provider")
+	}
 }

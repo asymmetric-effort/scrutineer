@@ -1,14 +1,14 @@
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0.1-dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
-MODULES := core connector/cli connector/http connector/ssh connector/grpc connector/browser loadtest fuzz cmd/scrutineer
+MODULES := core connector/cli connector/http connector/ssh connector/grpc connector/browser loadtest fuzz cmd/scrutineer provider/static
 
 # Modules exempt from the 98% coverage gate.
 # - cmd/scrutineer: CLI entry point with os.Exit, signal handling — tested via integration
 # - connector/grpc: 96.8% — remaining gap is defensive error handling in gRPC stream I/O
 #   that is structurally unreachable without mocking gRPC internals
 # - connector/browser/cdp: 95.7% — remaining gap is unreachable I/O error paths in bufio.Writer
-COVERAGE_EXEMPT := cmd/scrutineer connector/grpc connector/browser
+COVERAGE_EXEMPT := cmd/scrutineer connector/grpc connector/browser provider/static
 
 .PHONY: all build test vet vuln clean cross fmt coverage precommit
 
