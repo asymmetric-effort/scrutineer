@@ -1,6 +1,7 @@
 import { createElement as h, Fragment } from '@asymmetric-effort/specifyjs';
 import { renderToStaticMarkup } from '@asymmetric-effort/specifyjs/server';
 import { Footer as SpecFooter } from '@asymmetric-effort/specifyjs/components';
+import { specifyJsSeoPlugin } from '@asymmetric-effort/specifyjs/build';
 import { writeFileSync, mkdirSync, cpSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -265,6 +266,18 @@ writeFileSync(join(outDir, 'index.html'), html);
 cpSync(join(__dirname, '..', 'public', 'css', 'style.css'), join(outDir, 'css', 'style.css'));
 cpSync(join(__dirname, '..', 'public', 'img', 'logo.png'), join(outDir, 'img', 'logo.png'));
 cpSync(join(__dirname, '..', 'CNAME'), join(outDir, 'CNAME'));
+
+// Generate SEO files (sitemap.xml, robots.txt, llms.txt)
+const seoPlugin = specifyJsSeoPlugin({
+    siteUrl: 'https://scrutineer.asymmetric-effort.com',
+    routes: ['/'],
+    title: 'Scrutineer',
+    description: 'An extensible test framework for automating tests against CLI programs, APIs, and web applications. Zero third-party dependencies. Built in Go.',
+    repository: 'https://github.com/asymmetric-effort/scrutineer',
+    license: 'MIT',
+    author: 'Asymmetric Effort, LLC',
+});
+seoPlugin.closeBundle();
 
 console.log('Site built to', outDir);
 console.log('  index.html:', html.length, 'bytes');
