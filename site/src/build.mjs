@@ -56,35 +56,96 @@ function Hero() {
 }
 
 function CodeExample() {
-    const code = `suite: "User API Tests"
-tags: [api, smoke]
+    const code = `suite: "E-Commerce API"
+tags: [api, loadtest]
 
-tests:
-  - name: "Create user returns 201"
-    connector: http
-    steps:
-      - action: request
-        method: POST
-        path: /users
-        body:
-          name: "Alice"
-          email: "alice@example.com"
-        assert:
-          - status: 201
-          - body.name: {equals: "Alice"}
-          - elapsed: {less_than: 2s}
-        capture:
-          user_id: body.id
+execution:
+  mode: weighted
+  concurrency: 100
+  duration: "10m"
+  repeat: 0
+  fleet:
+    providers:
+      - provider: static
+        weight: 100
+        ttl: 0
+        static:
+          ssh:
+            user: scrutineer
+            key_file: ~/.ssh/ed25519
+          nodes: [10.0.1.10, 10.0.1.11]
 
-  - name: "Verify user exists"
-    connector: http
-    steps:
-      - action: request
-        method: GET
-        path: /users/\${capture.user_id}
-        assert:
-          - status: 200
-          - body.email: {equals: "alice@example.com"}`;
+interactions:
+  - name: "User session"
+    weight: 7
+    mode: sequential
+    tests:
+      - name: "Login"
+        connector: http
+        steps:
+          - action: request
+            method: POST
+            path: /api/auth/login
+            body:
+              email: "\${fn:concat(random_string(alpha, 5, 8), '@test.com')}"
+              password: "\${fn:env_or('TEST_PASSWORD', 'secret')}"
+            assert:
+              - field: status
+                operator: equal
+                expected: 200
+            capture:
+              token: body.token
+
+      - name: "Browse catalog"
+        connector: http
+        steps:
+          - action: request
+            method: GET
+            path: /api/products
+            headers:
+              Authorization: "Bearer \${capture.token}"
+            query:
+              page: "\${fn:random_int(1, 50)}"
+            assert:
+              - field: status
+                operator: equal
+                expected: 200
+              - field: elapsed_ms
+                operator: less_than
+                expected: 3000
+
+  - name: "Checkout"
+    weight: 2
+    mode: sequential
+    tests:
+      - name: "Place order"
+        connector: http
+        steps:
+          - action: request
+            method: POST
+            path: /api/orders
+            body:
+              product_id: "\${fn:random_int(1, 1000)}"
+              idempotency_key: "\${fn:uuid()}"
+            assert:
+              - field: status
+                operator: status_class
+                expected: "2xx"
+
+  - name: "Admin"
+    weight: 1
+    mode: random
+    tests:
+      - name: "Pull report"
+        connector: http
+        steps:
+          - action: request
+            method: GET
+            path: /api/admin/reports
+            assert:
+              - field: status
+                operator: equal
+                expected: 200`;
 
     return h('div', { className: 'code-example' },
         h('div', { className: 'code-header' }, 'example.test.yaml'),
