@@ -86,11 +86,25 @@ func (d *ConcurrentDispatcher) Dispatch(ctx context.Context, count int, workFn f
 		if ctx.Err() != nil {
 			break
 		}
+		// Acquire semaphore slot before adding to WaitGroup to prevent
+		// the case where Add(1) succeeds but the goroutine never launches.
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			break
+		}
+		if ctx.Err() != nil {
+			// Drain the slot we just acquired.
+			select {
+			case <-sem:
+			default:
+			}
+			break
+		}
 		wg.Add(1)
-		sem <- struct{}{} // acquire slot
 		go func(idx int) {
 			defer wg.Done()
-			defer func() { <-sem }() // release slot
+			defer func() { <-sem }()
 			defer func() {
 				if r := recover(); r != nil {
 					panicMu.Lock()
@@ -106,9 +120,8 @@ func (d *ConcurrentDispatcher) Dispatch(ctx context.Context, count int, workFn f
 	}
 	wg.Wait()
 
-	// Re-panic with the first captured panic so the caller sees it.
 	if len(panics) > 0 {
-		panic(&panics[0])
+		panic(panics[0].Value)
 	}
 }
 

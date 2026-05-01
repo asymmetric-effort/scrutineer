@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -110,13 +111,19 @@ func builtinRandomString(args []any) (any, error) {
 
 	length := minLen
 	if maxLen > minLen {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(maxLen-minLen+1)))
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(maxLen-minLen+1)))
+		if err != nil {
+			return nil, fmt.Errorf("random_string: %w", err)
+		}
 		length = minLen + int(n.Int64())
 	}
 
 	result := make([]byte, length)
 	for i := range result {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(cs))))
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(cs))))
+		if err != nil {
+			return nil, fmt.Errorf("random_string: %w", err)
+		}
 		result[i] = cs[n.Int64()]
 	}
 	return string(result), nil
@@ -251,7 +258,10 @@ func builtinRandomInt(args []any) (any, error) {
 	if minVal == maxVal {
 		return minVal, nil
 	}
-	n, _ := rand.Int(rand.Reader, big.NewInt(int64(maxVal-minVal+1)))
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(maxVal-minVal+1)))
+	if err != nil {
+		return nil, fmt.Errorf("random_int: %w", err)
+	}
 	return minVal + int(n.Int64()), nil
 }
 
@@ -378,7 +388,7 @@ func builtinNowUnix(args []any) (any, error) {
 	if len(args) != 0 {
 		return nil, fmt.Errorf("now_unix: expected 0 args, got %d", len(args))
 	}
-	return int(time.Now().Unix()), nil
+	return time.Now().Unix(), nil
 }
 
 func builtinNowISO(args []any) (any, error) {
@@ -591,10 +601,11 @@ func toInt(v any) (int, error) {
 	switch val := v.(type) {
 	case int:
 		return val, nil
+	case int64:
+		return int(val), nil
 	case float64:
 		return int(val), nil
 	case string:
-		// Not supported — callers should pass numbers.
 		return 0, fmt.Errorf("expected number, got string %q", val)
 	default:
 		return 0, fmt.Errorf("expected number, got %T", v)
@@ -606,6 +617,8 @@ func toFloat(v any) (float64, error) {
 	case float64:
 		return val, nil
 	case int:
+		return float64(val), nil
+	case int64:
 		return float64(val), nil
 	case string:
 		return 0, fmt.Errorf("expected number, got string %q", val)
@@ -634,20 +647,36 @@ type DBOpener interface {
 }
 
 // dbOpener is the global DB opener. Nil until a driver is registered.
-var dbOpener DBOpener
+// Protected by dbMu for thread-safe access.
+var (
+	dbOpener DBOpener
+	dbMu     sync.RWMutex
+)
 
 // RegisterDBOpener registers a database opener for use by db_* functions.
 // This should be called at application startup by a database driver package.
 func RegisterDBOpener(opener DBOpener) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
 	dbOpener = opener
+}
+
+func getDBOpener() (DBOpener, error) {
+	dbMu.RLock()
+	defer dbMu.RUnlock()
+	if dbOpener == nil {
+		return nil, fmt.Errorf("no database driver registered (call expression.RegisterDBOpener)")
+	}
+	return dbOpener, nil
 }
 
 func builtinDBQuery(args []any) (any, error) {
 	if len(args) != 2 {
 		return nil, fmt.Errorf("db_query: expected 2 args (dsn, query), got %d", len(args))
 	}
-	if dbOpener == nil {
-		return nil, fmt.Errorf("db_query: no database driver registered (call expression.RegisterDBOpener)")
+	opener, err := getDBOpener()
+	if err != nil {
+		return nil, fmt.Errorf("db_query: %w", err)
 	}
 	dsn, err := toString(args[0])
 	if err != nil {
@@ -657,7 +686,7 @@ func builtinDBQuery(args []any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("db_query: query: %w", err)
 	}
-	rows, err := dbOpener.Query(dsn, query)
+	rows, err := opener.Query(dsn, query)
 	if err != nil {
 		return nil, fmt.Errorf("db_query: %w", err)
 	}
@@ -668,8 +697,9 @@ func builtinDBQueryOne(args []any) (any, error) {
 	if len(args) != 2 {
 		return nil, fmt.Errorf("db_query_one: expected 2 args (dsn, query), got %d", len(args))
 	}
-	if dbOpener == nil {
-		return nil, fmt.Errorf("db_query_one: no database driver registered (call expression.RegisterDBOpener)")
+	opener, err := getDBOpener()
+	if err != nil {
+		return nil, fmt.Errorf("db_query_one: %w", err)
 	}
 	dsn, err := toString(args[0])
 	if err != nil {
@@ -679,7 +709,7 @@ func builtinDBQueryOne(args []any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("db_query_one: query: %w", err)
 	}
-	rows, err := dbOpener.Query(dsn, query)
+	rows, err := opener.Query(dsn, query)
 	if err != nil {
 		return nil, fmt.Errorf("db_query_one: %w", err)
 	}
@@ -693,8 +723,9 @@ func builtinDBCount(args []any) (any, error) {
 	if len(args) != 2 {
 		return nil, fmt.Errorf("db_count: expected 2 args (dsn, query), got %d", len(args))
 	}
-	if dbOpener == nil {
-		return nil, fmt.Errorf("db_count: no database driver registered (call expression.RegisterDBOpener)")
+	opener, err := getDBOpener()
+	if err != nil {
+		return nil, fmt.Errorf("db_count: %w", err)
 	}
 	dsn, err := toString(args[0])
 	if err != nil {
@@ -704,7 +735,7 @@ func builtinDBCount(args []any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("db_count: query: %w", err)
 	}
-	rows, err := dbOpener.Query(dsn, query)
+	rows, err := opener.Query(dsn, query)
 	if err != nil {
 		return nil, fmt.Errorf("db_count: %w", err)
 	}

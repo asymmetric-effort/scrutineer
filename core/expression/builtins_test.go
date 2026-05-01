@@ -433,7 +433,7 @@ func TestNowUnix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	n := val.(int)
+	n := val.(int64)
 	if n < 1000000000 {
 		t.Errorf("too small: %d", n)
 	}

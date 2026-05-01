@@ -262,14 +262,26 @@ func (e *Engine) runSuiteWithExecution(ctx context.Context, suite schema.TestSui
 	if exec.Fleet != nil && e.fleetRegistry != nil {
 		orch = fleet.NewOrchestrator(e.fleetRegistry, *exec.Fleet)
 		if err := orch.Setup(ctx); err != nil {
-			// Fleet setup failure — report as a failed suite.
+			e.reporter.OnSuiteStart(info)
+			e.reporter.OnSuiteEnd(info, reporter.SuiteSummary{
+				Failed:  1,
+				Elapsed: time.Since(start),
+			})
 			return SuiteResult{
 				Suite:   suite.Suite,
 				Failed:  1,
 				Elapsed: time.Since(start),
+				Results: []reporter.TestResult{{
+					Passed: false,
+					Steps: []reporter.StepResult{{
+						Name:   "fleet-setup",
+						Passed: false,
+						Error:  fmt.Errorf("fleet setup failed: %w", err),
+					}},
+				}},
 			}
 		}
-		defer orch.Teardown(ctx)
+		defer orch.Teardown(context.Background())
 	}
 
 	runner := NewRunner(e.registry, e.reporter, e.telemetry, e.coverage)

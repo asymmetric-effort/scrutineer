@@ -711,6 +711,31 @@ func TestValidateFleetNoProviders(t *testing.T) {
 
 // --- Backward compatibility ---
 
+func TestValidateSuiteConcurrentZeroConcurrency(t *testing.T) {
+	suite := validSuiteWithExecution(&Execution{
+		Mode:   ModeConcurrent,
+		Repeat: 1,
+	})
+	err := ValidateSuite(suite)
+	if err == nil {
+		t.Fatal("expected error for concurrent mode with concurrency=0")
+	}
+	if !contains(err.Error(), "concurrent mode requires concurrency > 0") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateSuiteConcurrentPositiveConcurrency(t *testing.T) {
+	suite := validSuiteWithExecution(&Execution{
+		Mode:        ModeConcurrent,
+		Concurrency: 10,
+		Repeat:      1,
+	})
+	if err := ValidateSuite(suite); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 func TestValidateSuiteNoExecutionBackwardCompat(t *testing.T) {
 	suite := &TestSuite{
 		Suite: "S",

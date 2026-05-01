@@ -6,14 +6,17 @@ import (
 	"strings"
 )
 
+const maxParseDepth = 256
+
 // parser is a recursive descent parser for expression tokens.
 type parser struct {
 	tokens []Token
 	pos    int
+	depth  int
 }
 
 // Parse converts a token slice into an expression AST.
-// The top-level expression must be a function call.
+// The top-level expression can be a function call, literal, or variable reference.
 func Parse(tokens []Token) (Expr, error) {
 	if len(tokens) == 0 {
 		return nil, fmt.Errorf("expression: empty expression")
@@ -44,6 +47,11 @@ func (p *parser) next() Token {
 
 // parseExpr parses a single expression: function call, literal, or variable reference.
 func (p *parser) parseExpr() (Expr, error) {
+	p.depth++
+	defer func() { p.depth-- }()
+	if p.depth > maxParseDepth {
+		return nil, fmt.Errorf("expression: maximum nesting depth (%d) exceeded", maxParseDepth)
+	}
 	tok, ok := p.peek()
 	if !ok {
 		return nil, fmt.Errorf("expression: unexpected end of input")

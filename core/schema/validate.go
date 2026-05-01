@@ -97,6 +97,10 @@ func validateExecution(ve *ValidationError, exec *Execution) {
 		ve.add("execution: concurrency must be >= 0")
 	}
 
+	if exec.Mode == ModeConcurrent && exec.Concurrency == 0 {
+		ve.add("execution: concurrent mode requires concurrency > 0")
+	}
+
 	if exec.Duration != "" {
 		if _, err := time.ParseDuration(exec.Duration); err != nil {
 			ve.add(fmt.Sprintf("execution: invalid duration %q: %v", exec.Duration, err))

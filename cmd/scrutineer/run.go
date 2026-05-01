@@ -13,6 +13,7 @@ import (
 	"github.com/scrutineer/scrutineer/core/engine"
 	"github.com/scrutineer/scrutineer/core/exitcode"
 	"github.com/scrutineer/scrutineer/core/expression"
+	"github.com/scrutineer/scrutineer/core/fleet"
 	"github.com/scrutineer/scrutineer/core/reporter"
 	"github.com/scrutineer/scrutineer/core/schema"
 	"github.com/scrutineer/scrutineer/core/telemetry"
@@ -69,6 +70,9 @@ func cmdRun(registry *connector.Registry, args []string) int {
 	// Set up expression function registry for ${fn:...} evaluation.
 	exprRegistry := expression.DefaultRegistry()
 
+	// Set up fleet provider registry for distributed execution.
+	fleetRegistry := fleet.NewRegistry()
+
 	// Build engine
 	eng := engine.New(
 		engine.WithRegistry(registry),
@@ -78,6 +82,7 @@ func cmdRun(registry *connector.Registry, args []string) int {
 		engine.WithParallelism(cfg.Parallelism),
 		engine.WithConnectorConfigs(cfg.Connectors),
 		engine.WithExpressionRegistry(exprRegistry),
+		engine.WithFleetRegistry(fleetRegistry),
 	)
 
 	// Run with signal handling

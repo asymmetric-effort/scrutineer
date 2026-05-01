@@ -254,16 +254,9 @@ func TestConcurrentPanicRecovery(t *testing.T) {
 		if r == nil {
 			t.Fatal("expected re-panic from concurrent dispatcher")
 		}
-		pe, ok := r.(*PanicError)
-		if !ok {
-			t.Fatalf("expected *PanicError, got %T", r)
-		}
-		if pe.Value != "test panic" {
-			t.Errorf("panic value = %v", pe.Value)
-		}
-		// Verify Error() string.
-		if pe.Error() == "" {
-			t.Error("expected non-empty error string")
+		// The dispatcher re-panics with the original value.
+		if r != "test panic" {
+			t.Errorf("panic value = %v, want 'test panic'", r)
 		}
 	}()
 
@@ -272,6 +265,13 @@ func TestConcurrentPanicRecovery(t *testing.T) {
 			panic("test panic")
 		}
 	})
+}
+
+func TestPanicErrorString(t *testing.T) {
+	pe := PanicError{Index: 3, Value: "boom"}
+	if pe.Error() == "" {
+		t.Error("expected non-empty error string")
+	}
 }
 
 func TestConcurrentPanicDoesNotHang(t *testing.T) {

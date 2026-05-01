@@ -10,11 +10,14 @@ type Resolver interface {
 	Resolve(ref string) (any, bool)
 }
 
+const maxEvalDepth = 256
+
 // Evaluator evaluates parsed expression ASTs using a function registry
 // and a variable resolver.
 type Evaluator struct {
 	registry *Registry
 	resolver Resolver
+	depth    int
 }
 
 // NewEvaluator creates an Evaluator.
@@ -24,6 +27,11 @@ func NewEvaluator(reg *Registry, resolver Resolver) *Evaluator {
 
 // Eval evaluates an expression and returns the result.
 func (e *Evaluator) Eval(expr Expr) (any, error) {
+	e.depth++
+	defer func() { e.depth-- }()
+	if e.depth > maxEvalDepth {
+		return nil, fmt.Errorf("expression: maximum evaluation depth (%d) exceeded", maxEvalDepth)
+	}
 	switch node := expr.(type) {
 	case *StringLit:
 		return node.Value, nil
