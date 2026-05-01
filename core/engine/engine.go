@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/scrutineer/scrutineer/core/coverage"
 	"github.com/scrutineer/scrutineer/core/exitcode"
 	"github.com/scrutineer/scrutineer/core/expression"
+	"github.com/scrutineer/scrutineer/core/fleet"
 	"github.com/scrutineer/scrutineer/core/reporter"
 	"github.com/scrutineer/scrutineer/core/schema"
 	"github.com/scrutineer/scrutineer/core/telemetry"
@@ -52,6 +54,11 @@ func WithExpressionRegistry(r *expression.Registry) Option {
 	return func(e *Engine) { e.exprRegistry = r }
 }
 
+// WithFleetRegistry sets the fleet provider registry for distributed execution.
+func WithFleetRegistry(r *fleet.Registry) Option {
+	return func(e *Engine) { e.fleetRegistry = r }
+}
+
 // Engine orchestrates test execution across suites.
 type Engine struct {
 	registry         *connector.Registry
@@ -61,6 +68,7 @@ type Engine struct {
 	parallelism      int
 	connectorConfigs map[string]map[string]any
 	exprRegistry     *expression.Registry
+	fleetRegistry    *fleet.Registry
 }
 
 // New creates an Engine with the provided options.
@@ -249,6 +257,21 @@ func (e *Engine) runSuiteWithExecution(ctx context.Context, suite schema.TestSui
 		})
 	}
 
+	// Set up fleet orchestrator if fleet config is present.
+	var orch *fleet.Orchestrator
+	if exec.Fleet != nil && e.fleetRegistry != nil {
+		orch = fleet.NewOrchestrator(e.fleetRegistry, *exec.Fleet)
+		if err := orch.Setup(ctx); err != nil {
+			// Fleet setup failure — report as a failed suite.
+			return SuiteResult{
+				Suite:   suite.Suite,
+				Failed:  1,
+				Elapsed: time.Since(start),
+			}
+		}
+		defer orch.Teardown(ctx)
+	}
+
 	runner := NewRunner(e.registry, e.reporter, e.telemetry, e.coverage)
 
 	sr := SuiteResult{
@@ -289,7 +312,14 @@ func (e *Engine) runSuiteWithExecution(ctx context.Context, suite schema.TestSui
 	lc.Run(ctx, func(passCtx context.Context, passNum int) {
 		outerDispatcher.Dispatch(passCtx, dispatchCount, func(dCtx context.Context, interIdx int) {
 			inter := interactions[interIdx]
-			e.runInteraction(dCtx, runner, inter, suite, passNum, &sr, &mu)
+
+			// Select provider for this interaction if fleet is configured.
+			var providerName string
+			if orch != nil {
+				providerName = orch.SelectProvider()
+			}
+
+			e.runInteraction(dCtx, runner, inter, suite, passNum, providerName, &sr, &mu)
 		})
 	})
 
@@ -323,6 +353,7 @@ func (e *Engine) runInteraction(
 	inter schema.Interaction,
 	suite schema.TestSuite,
 	passNum int,
+	providerName string,
 	sr *SuiteResult,
 	mu *sync.Mutex,
 ) {
@@ -350,6 +381,33 @@ func (e *Engine) runInteraction(
 		mode = schema.ModeSequential
 	}
 
+	// Emit interaction start telemetry.
+	if e.telemetry != nil {
+		tags := map[string]string{
+			"suite":       suite.Suite,
+			"interaction": inter.Name,
+			"mode":        string(mode),
+			"pass":        fmt.Sprintf("%d", passNum),
+		}
+		if providerName != "" {
+			tags["provider"] = providerName
+		}
+		_ = e.telemetry.Write(telemetry.Record{
+			Timestamp: telemetry.NowNano(),
+			EventType: telemetry.InteractionStart,
+			Tags:      tags,
+		})
+	}
+
+	// For sequential mode, share the TestContext so captures flow between
+	// tests within the interaction. For concurrent/random/weighted modes,
+	// each test gets its own TestContext to avoid data races.
+	shared := mode == schema.ModeSequential
+
+	// For weighted interaction mode, dispatch count = len(tests) means each
+	// dispatch makes N weighted selections from the test pool. Some tests may
+	// run multiple times and others may not run at all — this is intentional
+	// for simulating realistic workload distributions within an interaction.
 	innerDispatcher := NewDispatcher(mode, 0, testWeights)
 	innerDispatcher.Dispatch(ctx, len(inter.Tests), func(tCtx context.Context, testIdx int) {
 		test := inter.Tests[testIdx]
@@ -361,7 +419,18 @@ func (e *Engine) runInteraction(
 			return
 		}
 
-		tctx.Test = test.Name
+		// Use per-test context for non-sequential modes to avoid races.
+		testCtx := tctx
+		if !shared {
+			testCtx = NewTestContext(suite.Suite, test.Name, suite.Fixtures)
+			testCtx.Interaction = inter.Name
+			testCtx.PassNum = passNum
+			if e.exprRegistry != nil {
+				testCtx.Store.SetExpressionRegistry(e.exprRegistry)
+			}
+		} else {
+			testCtx.Test = test.Name
+		}
 
 		testInfo := reporter.TestInfo{
 			Name:  test.Name,
@@ -380,7 +449,7 @@ func (e *Engine) runInteraction(
 			}
 		}
 
-		result := runner.RunTest(tCtx, tctx, test, connectorConfig)
+		result := runner.RunTest(tCtx, testCtx, test, connectorConfig)
 
 		mu.Lock()
 		sr.Results = append(sr.Results, result)
@@ -388,6 +457,19 @@ func (e *Engine) runInteraction(
 
 		e.reporter.OnTestEnd(testInfo, result)
 	})
+
+	// Emit interaction end telemetry.
+	if e.telemetry != nil {
+		_ = e.telemetry.Write(telemetry.Record{
+			Timestamp: telemetry.NowNano(),
+			EventType: telemetry.InteractionEnd,
+			Tags: map[string]string{
+				"suite":       suite.Suite,
+				"interaction": inter.Name,
+				"pass":        fmt.Sprintf("%d", passNum),
+			},
+		})
+	}
 }
 
 // parseDuration parses a duration string, returning 0 for empty strings.

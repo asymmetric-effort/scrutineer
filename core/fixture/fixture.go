@@ -119,29 +119,35 @@ func (s *Store) Interpolate(input string) (string, error) {
 
 		// Check for ${...} pattern.
 		if i+1 < len(input) && input[i] == '$' && input[i+1] == '{' {
-			// Find the closing brace.
-			end := strings.Index(input[i:], "}")
-			if end == -1 {
-				// No closing brace; write literally.
-				result.WriteByte(input[i])
-				i++
-				continue
-			}
-
-			ref := input[i+2 : i+end]
-
-			// Check for fn: prefix — expression function call.
-			if strings.HasPrefix(ref, "fn:") {
+			// Check if this is a fn: expression — needs depth-aware scanning
+			// to handle nested parens and quoted strings containing '}'.
+			if i+4 < len(input) && input[i+2:i+5] == "fn:" {
+				end := findExpressionEnd(input, i+2)
+				if end == -1 {
+					result.WriteByte(input[i])
+					i++
+					continue
+				}
+				ref := input[i+2 : end]
 				exprStr := ref[3:] // strip "fn:" prefix
 				val, err := s.evalExpression(exprStr)
 				if err != nil {
 					return "", fmt.Errorf("expression error in ${fn:%s}: %w", exprStr, err)
 				}
 				result.WriteString(fmt.Sprintf("%v", val))
-				i += end + 1
+				i = end + 1 // skip past closing '}'
 				continue
 			}
 
+			// Simple variable reference — find closing brace.
+			end := strings.Index(input[i:], "}")
+			if end == -1 {
+				result.WriteByte(input[i])
+				i++
+				continue
+			}
+
+			ref := input[i+2 : i+end]
 			val, ok := s.Resolve(ref)
 			if !ok {
 				return "", fmt.Errorf("unresolved variable: %s", ref)
@@ -157,6 +163,52 @@ func (s *Store) Interpolate(input string) (string, error) {
 	}
 
 	return result.String(), nil
+}
+
+// findExpressionEnd scans from the start of a ${...} body (after the '${'
+// characters) to find the matching closing '}', correctly handling nested
+// parentheses and quoted strings that may contain '}' characters.
+// Returns the index of the closing '}' in the input string, or -1 if not found.
+func findExpressionEnd(input string, start int) int {
+	depth := 0 // paren depth
+	inSingle := false
+	inDouble := false
+
+	for j := start; j < len(input); j++ {
+		ch := input[j]
+
+		// Handle escape sequences inside strings.
+		if (inSingle || inDouble) && ch == '\\' && j+1 < len(input) {
+			j++ // skip escaped character
+			continue
+		}
+
+		if ch == '\'' && !inDouble {
+			inSingle = !inSingle
+			continue
+		}
+		if ch == '"' && !inSingle {
+			inDouble = !inDouble
+			continue
+		}
+
+		// Skip characters inside strings.
+		if inSingle || inDouble {
+			continue
+		}
+
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case '}':
+			if depth == 0 {
+				return j
+			}
+		}
+	}
+	return -1
 }
 
 // evalExpression parses and evaluates an expression function string.

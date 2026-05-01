@@ -1,0 +1,141 @@
+# Example: Execution block with interactions.
+#
+# This suite demonstrates the execution framework: interactions group
+# tests into logical user journeys, the execution block controls
+# dispatch mode, concurrency, duration, and repeat.
+#
+# Run with:
+#   scrutineer run --config scrutineer.yaml
+
+suite: "E-Commerce Load Test"
+tags: [loadtest, api]
+
+fixtures:
+  users:
+    email: "loadtest@example.com"
+    password: "LoadTestPass123!"
+
+execution:
+  mode: weighted           # interactions selected by probability
+  concurrency: 100         # max parallel tests across all passes
+  duration: "10m"          # run for 10 minutes
+  repeat: 0                # unlimited passes (bounded by duration)
+  interval: "0s"           # no delay between passes
+
+interactions:
+  # --- Browsing session (70% of traffic) ---
+  - name: "User browsing session"
+    weight: 7
+    mode: sequential        # tests within this interaction run in order
+    tests:
+      - name: "Login"
+        connector: http
+        steps:
+          - action: request
+            method: POST
+            path: /api/auth/login
+            body:
+              email: "${fn:concat(random_string(alpha, 5, 8), \"@loadtest.com\")}"
+              password: "${fixture.users.password}"
+            assert:
+              - field: status
+                operator: equal
+                expected: 200
+            capture:
+              auth_token: body.token
+
+      - name: "Browse catalog"
+        connector: http
+        steps:
+          - action: request
+            method: GET
+            path: /api/products
+            headers:
+              Authorization: "Bearer ${capture.auth_token}"
+            query:
+              page: "${fn:random_int(1, 10)}"
+              limit: "20"
+            assert:
+              - field: status
+                operator: equal
+                expected: 200
+              - field: elapsed_ms
+                operator: less_than
+                expected: 3000
+
+      - name: "View product detail"
+        connector: http
+        steps:
+          - action: request
+            method: GET
+            path: /api/products/${fn:random_int(1, 1000)}
+            headers:
+              Authorization: "Bearer ${capture.auth_token}"
+            assert:
+              - field: status
+                operator: equal
+                expected: 200
+
+  # --- Checkout flow (20% of traffic) ---
+  - name: "Checkout flow"
+    weight: 2
+    mode: sequential
+    tests:
+      - name: "Add to cart"
+        connector: http
+        steps:
+          - action: request
+            method: POST
+            path: /api/cart
+            body:
+              product_id: "${fn:random_int(1, 100)}"
+              quantity: 1
+            assert:
+              - field: status
+                operator: equal
+                expected: 201
+
+      - name: "Submit order"
+        connector: http
+        steps:
+          - action: request
+            method: POST
+            path: /api/orders
+            body:
+              payment_method: "test_card"
+              idempotency_key: "${fn:uuid()}"
+            assert:
+              - field: status
+                operator: status_class
+                expected: "2xx"
+
+  # --- Admin operations (10% of traffic) ---
+  - name: "Admin operations"
+    weight: 1
+    mode: random             # admin tests run in random order
+    tests:
+      - name: "Pull daily report"
+        connector: http
+        weight: 3            # 3x more likely than inventory update
+        steps:
+          - action: request
+            method: GET
+            path: /api/admin/reports/daily
+            assert:
+              - field: status
+                operator: equal
+                expected: 200
+
+      - name: "Update inventory"
+        connector: http
+        weight: 1
+        steps:
+          - action: request
+            method: PATCH
+            path: /api/admin/products/${fn:random_int(1, 100)}
+            body:
+              stock: ${fn:random_int(0, 500)}
+            assert:
+              - field: status
+                operator: equal
+                expected: 200

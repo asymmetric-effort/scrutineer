@@ -246,3 +246,56 @@ func TestNewDispatcherDefault(t *testing.T) {
 		t.Errorf("expected SequentialDispatcher for empty mode, got %T", d)
 	}
 }
+
+func TestConcurrentPanicRecovery(t *testing.T) {
+	d := NewConcurrentDispatcher(2)
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected re-panic from concurrent dispatcher")
+		}
+		pe, ok := r.(*PanicError)
+		if !ok {
+			t.Fatalf("expected *PanicError, got %T", r)
+		}
+		if pe.Value != "test panic" {
+			t.Errorf("panic value = %v", pe.Value)
+		}
+		// Verify Error() string.
+		if pe.Error() == "" {
+			t.Error("expected non-empty error string")
+		}
+	}()
+
+	d.Dispatch(context.Background(), 5, func(_ context.Context, idx int) {
+		if idx == 2 {
+			panic("test panic")
+		}
+	})
+}
+
+func TestConcurrentPanicDoesNotHang(t *testing.T) {
+	// Ensure that a panic in one goroutine doesn't prevent other
+	// goroutines from completing (the WaitGroup still resolves).
+	d := NewConcurrentDispatcher(1) // serialized to make deterministic
+	done := make(chan struct{})
+
+	go func() {
+		defer func() {
+			recover() // catch the re-panic
+			close(done)
+		}()
+		d.Dispatch(context.Background(), 3, func(_ context.Context, idx int) {
+			if idx == 0 {
+				panic("boom")
+			}
+		})
+	}()
+
+	select {
+	case <-done:
+		// success — didn't hang
+	case <-context.Background().Done():
+		t.Fatal("dispatch hung after panic")
+	}
+}

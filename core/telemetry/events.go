@@ -36,6 +36,10 @@ const (
 	ConnectorTeardown EventType = 0x0E
 	// Metric represents a recorded metric.
 	Metric EventType = 0x0F
+	// InteractionStart signals the beginning of an interaction group.
+	InteractionStart EventType = 0x10
+	// InteractionEnd signals the end of an interaction group.
+	InteractionEnd EventType = 0x11
 )
 
 var eventNames = map[EventType]string{
@@ -54,6 +58,8 @@ var eventNames = map[EventType]string{
 	ConnectorSetup:    "ConnectorSetup",
 	ConnectorTeardown: "ConnectorTeardown",
 	Metric:            "Metric",
+	InteractionStart:  "InteractionStart",
+	InteractionEnd:    "InteractionEnd",
 }
 
 // String returns the human-readable name of the event type.

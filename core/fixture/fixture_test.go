@@ -526,3 +526,84 @@ func TestSetExpressionRegistry(t *testing.T) {
 		t.Fatal("registry not set")
 	}
 }
+
+// --- Brace-depth tracking tests ---
+
+func TestFindExpressionEnd_Simple(t *testing.T) {
+	input := "fn:uuid()}"
+	end := findExpressionEnd(input, 0)
+	expected := len(input) - 1 // index of '}'
+	if end != expected {
+		t.Errorf("end = %d, want %d", end, expected)
+	}
+}
+
+func TestFindExpressionEnd_NestedParens(t *testing.T) {
+	input := "fn:concat(upper(x), y)}"
+	end := findExpressionEnd(input, 0)
+	expected := len(input) - 1
+	if end != expected {
+		t.Errorf("end = %d, want %d", end, expected)
+	}
+}
+
+func TestFindExpressionEnd_QuotedBrace(t *testing.T) {
+	// ${fn:concat("}", "test")} — } inside quotes shouldn't close
+	input := `fn:concat("}", "test")}`
+	end := findExpressionEnd(input, 0)
+	expected := len(input) - 1
+	if end != expected {
+		t.Errorf("end = %d, want %d (should skip quoted })", end, expected)
+	}
+}
+
+func TestFindExpressionEnd_SingleQuotedBrace(t *testing.T) {
+	input := `fn:concat('}', 'test')}`
+	end := findExpressionEnd(input, 0)
+	expected := len(input) - 1
+	if end != expected {
+		t.Errorf("end = %d, want %d", end, expected)
+	}
+}
+
+func TestFindExpressionEnd_EscapedQuoteInString(t *testing.T) {
+	input := `fn:concat("te\"st}", "x")}`
+	end := findExpressionEnd(input, 0)
+	expected := len(input) - 1
+	if end != expected {
+		t.Errorf("end = %d, want %d", end, expected)
+	}
+}
+
+func TestFindExpressionEnd_NoClosingBrace(t *testing.T) {
+	input := "fn:uuid()"
+	end := findExpressionEnd(input, 0)
+	if end != -1 {
+		t.Errorf("end = %d, want -1", end)
+	}
+}
+
+func TestInterpolateFnWithQuotedBrace(t *testing.T) {
+	s := storeWithExpressions()
+	// The } inside quotes should not close the expression.
+	val, err := s.Interpolate(`prefix-${fn:concat("}", "ok")}-suffix`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val != "prefix-}ok-suffix" {
+		t.Errorf("got %q, want %q", val, "prefix-}ok-suffix")
+	}
+}
+
+func TestInterpolateFnUnclosedBrace(t *testing.T) {
+	s := storeWithExpressions()
+	// No closing } — should write $ literally.
+	val, err := s.Interpolate("${fn:uuid()")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should fall through to literal output since no closing brace found.
+	if !strings.Contains(val, "$") {
+		t.Errorf("expected literal $, got %q", val)
+	}
+}

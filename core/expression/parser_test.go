@@ -251,6 +251,21 @@ func TestParseNegativeNumber(t *testing.T) {
 	}
 }
 
+func TestParseFuncCallSecondArgError(t *testing.T) {
+	// After parsing first arg and consuming comma, the second arg parse fails.
+	tokens := []Token{
+		{Type: TokenIdent, Value: "fn"},
+		{Type: TokenLParen, Value: "("},
+		{Type: TokenNumber, Value: "1"},
+		{Type: TokenComma, Value: ","},
+		{Type: TokenComma, Value: ","}, // unexpected token as second arg
+	}
+	_, err := Parse(tokens)
+	if err == nil {
+		t.Fatal("expected error for bad second arg")
+	}
+}
+
 func TestParseNegativeFloat(t *testing.T) {
 	expr, err := Parse(mustTokenize(t, "fn(-3.14)"))
 	if err != nil {

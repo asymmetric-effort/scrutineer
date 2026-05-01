@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	mrand "math/rand/v2"
 	"sync"
@@ -65,9 +66,21 @@ func NewConcurrentDispatcher(concurrency int) *ConcurrentDispatcher {
 	return &ConcurrentDispatcher{concurrency: concurrency}
 }
 
+// PanicError records a panic that occurred during concurrent dispatch.
+type PanicError struct {
+	Index int
+	Value any
+}
+
+func (e *PanicError) Error() string {
+	return fmt.Sprintf("panic in concurrent dispatch item %d: %v", e.Index, e.Value)
+}
+
 func (d *ConcurrentDispatcher) Dispatch(ctx context.Context, count int, workFn func(ctx context.Context, index int)) {
 	sem := make(chan struct{}, d.concurrency)
 	var wg sync.WaitGroup
+	var panicMu sync.Mutex
+	var panics []PanicError
 
 	for i := 0; i < count; i++ {
 		if ctx.Err() != nil {
@@ -78,6 +91,13 @@ func (d *ConcurrentDispatcher) Dispatch(ctx context.Context, count int, workFn f
 		go func(idx int) {
 			defer wg.Done()
 			defer func() { <-sem }() // release slot
+			defer func() {
+				if r := recover(); r != nil {
+					panicMu.Lock()
+					panics = append(panics, PanicError{Index: idx, Value: r})
+					panicMu.Unlock()
+				}
+			}()
 			if ctx.Err() != nil {
 				return
 			}
@@ -85,6 +105,11 @@ func (d *ConcurrentDispatcher) Dispatch(ctx context.Context, count int, workFn f
 		}(i)
 	}
 	wg.Wait()
+
+	// Re-panic with the first captured panic so the caller sees it.
+	if len(panics) > 0 {
+		panic(&panics[0])
+	}
 }
 
 // WeightedDispatcher selects items probabilistically based on weights.

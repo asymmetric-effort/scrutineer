@@ -2,6 +2,7 @@ package expression
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -939,5 +940,168 @@ func TestToFloat_FromInt(t *testing.T) {
 	}
 	if v != 42.0 {
 		t.Errorf("got %f, want 42.0", v)
+	}
+}
+
+// --- DB function tests ---
+
+type mockDBOpener struct {
+	rows []map[string]any
+	err  error
+}
+
+func (m *mockDBOpener) Query(dsn, query string) ([]map[string]any, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.rows, nil
+}
+
+func TestDBQuery_NoDriver(t *testing.T) {
+	old := dbOpener
+	defer func() { dbOpener = old }()
+	dbOpener = nil
+
+	_, err := builtinDBQuery([]any{"dsn", "SELECT 1"})
+	if err == nil {
+		t.Fatal("expected error for no driver")
+	}
+	if !strings.Contains(err.Error(), "no database driver") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestDBQuery_WithDriver(t *testing.T) {
+	old := dbOpener
+	defer func() { dbOpener = old }()
+	dbOpener = &mockDBOpener{
+		rows: []map[string]any{
+			{"id": 1, "name": "alice"},
+			{"id": 2, "name": "bob"},
+		},
+	}
+
+	val, err := builtinDBQuery([]any{"test.db", "SELECT * FROM users"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, ok := val.([]map[string]any)
+	if !ok {
+		t.Fatalf("expected []map[string]any, got %T", val)
+	}
+	if len(rows) != 2 {
+		t.Errorf("rows = %d, want 2", len(rows))
+	}
+}
+
+func TestDBQuery_WrongArgs(t *testing.T) {
+	_, err := builtinDBQuery([]any{"only_one"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestDBQuery_DriverError(t *testing.T) {
+	old := dbOpener
+	defer func() { dbOpener = old }()
+	dbOpener = &mockDBOpener{err: fmt.Errorf("connection refused")}
+
+	_, err := builtinDBQuery([]any{"dsn", "SELECT 1"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestDBQueryOne_Success(t *testing.T) {
+	old := dbOpener
+	defer func() { dbOpener = old }()
+	dbOpener = &mockDBOpener{
+		rows: []map[string]any{{"id": 1}},
+	}
+
+	val, err := builtinDBQueryOne([]any{"dsn", "SELECT 1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	row, ok := val.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map, got %T", val)
+	}
+	if row["id"] != 1 {
+		t.Errorf("id = %v", row["id"])
+	}
+}
+
+func TestDBQueryOne_NoRows(t *testing.T) {
+	old := dbOpener
+	defer func() { dbOpener = old }()
+	dbOpener = &mockDBOpener{rows: nil}
+
+	_, err := builtinDBQueryOne([]any{"dsn", "SELECT 1"})
+	if err == nil {
+		t.Fatal("expected error for no rows")
+	}
+}
+
+func TestDBQueryOne_NoDriver(t *testing.T) {
+	old := dbOpener
+	defer func() { dbOpener = old }()
+	dbOpener = nil
+
+	_, err := builtinDBQueryOne([]any{"dsn", "SELECT 1"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestDBQueryOne_WrongArgs(t *testing.T) {
+	_, err := builtinDBQueryOne([]any{"only_one"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestDBCount_Success(t *testing.T) {
+	old := dbOpener
+	defer func() { dbOpener = old }()
+	dbOpener = &mockDBOpener{
+		rows: []map[string]any{{"id": 1}, {"id": 2}, {"id": 3}},
+	}
+
+	val, err := builtinDBCount([]any{"dsn", "SELECT * FROM users"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if val != 3 {
+		t.Errorf("count = %v, want 3", val)
+	}
+}
+
+func TestDBCount_NoDriver(t *testing.T) {
+	old := dbOpener
+	defer func() { dbOpener = old }()
+	dbOpener = nil
+
+	_, err := builtinDBCount([]any{"dsn", "SELECT 1"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestDBCount_WrongArgs(t *testing.T) {
+	_, err := builtinDBCount([]any{"only_one"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestRegisterDBOpener(t *testing.T) {
+	old := dbOpener
+	defer func() { dbOpener = old }()
+
+	mock := &mockDBOpener{}
+	RegisterDBOpener(mock)
+	if dbOpener != mock {
+		t.Fatal("opener not registered")
 	}
 }

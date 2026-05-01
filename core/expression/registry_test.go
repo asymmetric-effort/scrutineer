@@ -61,6 +61,7 @@ func TestDefaultRegistryHasAllBuiltins(t *testing.T) {
 		"base64_encode", "base64_decode", "url_encode", "url_decode", "json_encode",
 		"md5", "sha256", "sha512", "hmac_sha256",
 		"env", "env_or",
+		"db_query", "db_query_one", "db_count",
 	}
 	for _, name := range expected {
 		if _, ok := r.Get(name); !ok {

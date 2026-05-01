@@ -841,6 +841,41 @@ func TestRunTestCaptureExtractError(t *testing.T) {
 	}
 }
 
+func TestRunTestAssertionWithExtraOptions(t *testing.T) {
+	mc := newMockConnector("http")
+	mc.execResult = &connector.Result{
+		Data:    map[string]any{"status_code": 200},
+		Elapsed: time.Millisecond,
+	}
+
+	runner, _, _ := setupRunner(mc)
+
+	tctx := NewTestContext("s", "t", nil)
+	test := schema.Test{
+		Name:      "t",
+		Connector: "http",
+		Steps: []schema.TestStep{
+			{
+				Action: "GET",
+				Assert: []map[string]any{
+					{
+						"field":    "status_code",
+						"operator": "equal",
+						"expected": 200,
+						"message":  "custom error message", // extra option key
+					},
+				},
+			},
+		},
+	}
+
+	result := runner.RunTest(context.Background(), tctx, test, nil)
+
+	if !result.Passed {
+		t.Errorf("expected pass with extra options, got error: %v", result.Steps[0].Error)
+	}
+}
+
 func TestStepName(t *testing.T) {
 	s1 := schema.TestStep{Action: "GET"}
 	if got := stepName(s1, 0); got != "step[0]:GET" {

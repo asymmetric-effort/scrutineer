@@ -67,6 +67,11 @@ func registerBuiltins(r *Registry) {
 	// Env functions
 	_ = r.Register("env", builtinEnv)
 	_ = r.Register("env_or", builtinEnvOr)
+
+	// DB functions — require a driver to be registered via RegisterDBOpener.
+	_ = r.Register("db_query", builtinDBQuery)
+	_ = r.Register("db_query_one", builtinDBQueryOne)
+	_ = r.Register("db_count", builtinDBCount)
 }
 
 // --- String functions ---
@@ -616,4 +621,92 @@ func toString(v any) (string, error) {
 	default:
 		return fmt.Sprintf("%v", val), nil
 	}
+}
+
+// --- DB functions ---
+
+// DBOpener opens a database connection and executes a query.
+// This is the interface that database drivers must implement to enable
+// db_query, db_query_one, and db_count expression functions.
+type DBOpener interface {
+	// Query executes a query and returns all rows as a slice of maps.
+	Query(dsn, query string) ([]map[string]any, error)
+}
+
+// dbOpener is the global DB opener. Nil until a driver is registered.
+var dbOpener DBOpener
+
+// RegisterDBOpener registers a database opener for use by db_* functions.
+// This should be called at application startup by a database driver package.
+func RegisterDBOpener(opener DBOpener) {
+	dbOpener = opener
+}
+
+func builtinDBQuery(args []any) (any, error) {
+	if len(args) != 2 {
+		return nil, fmt.Errorf("db_query: expected 2 args (dsn, query), got %d", len(args))
+	}
+	if dbOpener == nil {
+		return nil, fmt.Errorf("db_query: no database driver registered (call expression.RegisterDBOpener)")
+	}
+	dsn, err := toString(args[0])
+	if err != nil {
+		return nil, fmt.Errorf("db_query: dsn: %w", err)
+	}
+	query, err := toString(args[1])
+	if err != nil {
+		return nil, fmt.Errorf("db_query: query: %w", err)
+	}
+	rows, err := dbOpener.Query(dsn, query)
+	if err != nil {
+		return nil, fmt.Errorf("db_query: %w", err)
+	}
+	return rows, nil
+}
+
+func builtinDBQueryOne(args []any) (any, error) {
+	if len(args) != 2 {
+		return nil, fmt.Errorf("db_query_one: expected 2 args (dsn, query), got %d", len(args))
+	}
+	if dbOpener == nil {
+		return nil, fmt.Errorf("db_query_one: no database driver registered (call expression.RegisterDBOpener)")
+	}
+	dsn, err := toString(args[0])
+	if err != nil {
+		return nil, fmt.Errorf("db_query_one: dsn: %w", err)
+	}
+	query, err := toString(args[1])
+	if err != nil {
+		return nil, fmt.Errorf("db_query_one: query: %w", err)
+	}
+	rows, err := dbOpener.Query(dsn, query)
+	if err != nil {
+		return nil, fmt.Errorf("db_query_one: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("db_query_one: no rows returned")
+	}
+	return rows[0], nil
+}
+
+func builtinDBCount(args []any) (any, error) {
+	if len(args) != 2 {
+		return nil, fmt.Errorf("db_count: expected 2 args (dsn, query), got %d", len(args))
+	}
+	if dbOpener == nil {
+		return nil, fmt.Errorf("db_count: no database driver registered (call expression.RegisterDBOpener)")
+	}
+	dsn, err := toString(args[0])
+	if err != nil {
+		return nil, fmt.Errorf("db_count: dsn: %w", err)
+	}
+	query, err := toString(args[1])
+	if err != nil {
+		return nil, fmt.Errorf("db_count: query: %w", err)
+	}
+	rows, err := dbOpener.Query(dsn, query)
+	if err != nil {
+		return nil, fmt.Errorf("db_count: %w", err)
+	}
+	return len(rows), nil
 }

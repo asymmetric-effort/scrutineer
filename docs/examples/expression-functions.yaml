@@ -1,0 +1,133 @@
+# Example: Expression functions in test manifests.
+#
+# Scrutineer supports runtime-evaluated expression functions using the
+# ${fn:function_name(args)} syntax. Functions are evaluated fresh on
+# each step execution, producing dynamic values for realistic test data.
+#
+# Run with:
+#   scrutineer run --config scrutineer.yaml
+
+suite: "Expression Functions Demo"
+tags: [demo, expressions]
+
+fixtures:
+  api:
+    base_path: "/api/v2"
+
+tests:
+  # --- String functions ---
+  - name: "Create user with random data"
+    connector: http
+    steps:
+      - action: request
+        method: POST
+        path: ${fixture.api.base_path}/users
+        body:
+          # random_string(charset, min_len, max_len)
+          # charset: alpha, alphanumeric, numeric, hex, ascii
+          username: "${fn:random_string(alphanumeric, 6, 12)}"
+          email: "${fn:concat(random_string(alpha, 5, 8), \"@test.com\")}"
+          # uuid() generates a v4 UUID
+          external_id: "${fn:uuid()}"
+          # upper/lower for case transformation
+          role: "${fn:upper(\"admin\")}"
+        assert:
+          - field: status
+            operator: equal
+            expected: 201
+        capture:
+          user_id: body.id
+
+  # --- Math functions ---
+  - name: "Update with random values"
+    connector: http
+    steps:
+      - action: request
+        method: PATCH
+        path: ${fixture.api.base_path}/users/${capture.user_id}
+        body:
+          # random_int(min, max) — inclusive range
+          age: ${fn:random_int(18, 80)}
+          # random_float(min, max)
+          score: ${fn:random_float(0.0, 100.0)}
+          # Math operations
+          priority: ${fn:mod(random_int(1, 100), 5)}
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+
+  # --- Time functions ---
+  - name: "Create event with timestamps"
+    connector: http
+    steps:
+      - action: request
+        method: POST
+        path: ${fixture.api.base_path}/events
+        body:
+          name: "Load test event"
+          # now() returns RFC3339 timestamp
+          created_at: "${fn:now()}"
+          # now_unix() returns Unix epoch seconds
+          timestamp: ${fn:now_unix()}
+          # add_duration adds a Go duration to a time
+          expires_at: "${fn:add_duration(now(), \"24h\")}"
+        assert:
+          - field: status
+            operator: equal
+            expected: 201
+
+  # --- Encoding functions ---
+  - name: "Send encoded data"
+    connector: http
+    steps:
+      - action: request
+        method: POST
+        path: ${fixture.api.base_path}/data
+        body:
+          # base64_encode/decode
+          encoded: "${fn:base64_encode(\"hello world\")}"
+          # url_encode/decode
+          query: "${fn:url_encode(\"key=value&foo=bar\")}"
+          # sha256 for checksums
+          checksum: "${fn:sha256(\"payload data\")}"
+        assert:
+          - field: status
+            operator: status_class
+            expected: "2xx"
+
+  # --- Environment variables ---
+  - name: "Auth with env-based secrets"
+    connector: http
+    steps:
+      - action: request
+        method: POST
+        path: ${fixture.api.base_path}/auth/token
+        body:
+          # env(name) reads an environment variable (error if missing)
+          client_id: "${fn:env(\"API_CLIENT_ID\")}"
+          # env_or(name, default) with fallback
+          client_secret: "${fn:env_or(\"API_SECRET\", \"dev-secret\")}"
+        assert:
+          - field: status
+            operator: equal
+            expected: 200
+
+  # --- Nested functions ---
+  - name: "Complex expressions"
+    connector: http
+    steps:
+      - action: request
+        method: POST
+        path: ${fixture.api.base_path}/complex
+        body:
+          # Functions can be nested
+          hash: "${fn:sha256(concat(uuid(), \":\", now()))}"
+          # HMAC signing
+          signature: "${fn:hmac_sha256(env_or(\"HMAC_KEY\", \"test-key\"), \"request-body\")}"
+          # String manipulation
+          slug: "${fn:lower(replace(random_string(alpha, 10, 10), \" \", \"-\"))}"
+        assert:
+          - field: status
+            operator: status_class
+            expected: "2xx"

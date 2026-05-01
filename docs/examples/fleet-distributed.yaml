@@ -1,0 +1,148 @@
+# Example: Fleet-based distributed load test.
+#
+# This suite uses the fleet configuration to distribute test execution
+# across multiple providers. Each interaction is assigned to a provider
+# based on weight probability.
+#
+# Providers:
+#   - static: pre-existing hosts connected via SSH (ed25519 keys)
+#   - aws_ec2: dynamically provisioned EC2 instances (future)
+#   - digitalocean: dynamically provisioned droplets (future)
+#
+# Run with:
+#   scrutineer run --config scrutineer-fleet.yaml
+
+suite: "Distributed API Load Test"
+tags: [loadtest, distributed]
+
+fixtures:
+  auth:
+    email: "loadtest@example.com"
+    password: "LoadTestPass123!"
+
+execution:
+  mode: weighted
+  concurrency: 500
+  duration: "30m"
+  repeat: 0
+
+  fleet:
+    providers:
+      # Static hosts — pre-existing infrastructure with SSH access.
+      # TTL: 0 means hosts persist for the entire test run.
+      - provider: static
+        weight: 20
+        ttl: 0
+        static:
+          ssh:
+            user: scrutineer
+            key_file: ~/.ssh/scrutineer_ed25519
+            port: 22
+          binary: /usr/local/bin/scrutineer
+          nodes:
+            - 10.0.1.10
+            - 10.0.1.11
+            - 10.0.1.12
+
+      # AWS EC2 — dynamically provisioned instances.
+      # TTL: 15 means instances are recycled every 15 minutes
+      # (drained, destroyed, replaced) for fresh IPs.
+      - provider: aws_ec2
+        weight: 60
+        ttl: 15
+        aws_ec2:
+          region: us-east-1
+          instance_type: t3.medium
+          ami: ami-0abcdef1234567890
+          min_nodes: 5
+          max_nodes: 15
+          subnet_id: "${fn:env(\"AWS_SUBNET_ID\")}"
+          security_group_id: "${fn:env(\"AWS_SG_ID\")}"
+          iam_instance_profile: scrutineer-loadtest
+          tags:
+            Name: scrutineer-loadtest
+            Environment: loadtest
+
+      # DigitalOcean — dynamically provisioned droplets.
+      # TTL: 30 means droplets are recycled every 30 minutes.
+      - provider: digitalocean
+        weight: 20
+        ttl: 30
+        digitalocean:
+          token: "${fn:env(\"DO_API_TOKEN\")}"
+          region: nyc3
+          size: s-2vcpu-4gb
+          image: ubuntu-24-04-x64
+          min_nodes: 2
+          max_nodes: 5
+          tags:
+            - scrutineer
+            - loadtest
+
+interactions:
+  - name: "Health check"
+    weight: 5
+    mode: sequential
+    tests:
+      - name: "API health"
+        connector: http
+        steps:
+          - action: request
+            method: GET
+            path: /api/health
+            assert:
+              - field: status
+                operator: equal
+                expected: 200
+              - field: elapsed_ms
+                operator: less_than
+                expected: 500
+
+  - name: "User session"
+    weight: 4
+    mode: sequential
+    tests:
+      - name: "Login"
+        connector: http
+        steps:
+          - action: request
+            method: POST
+            path: /api/auth/login
+            body:
+              email: "${fn:concat(random_string(alpha, 5, 8), \"@loadtest.com\")}"
+              password: "${fixture.auth.password}"
+            assert:
+              - field: status
+                operator: equal
+                expected: 200
+
+      - name: "Browse"
+        connector: http
+        steps:
+          - action: request
+            method: GET
+            path: /api/products
+            query:
+              page: "${fn:random_int(1, 50)}"
+            assert:
+              - field: status
+                operator: equal
+                expected: 200
+
+  - name: "Write operations"
+    weight: 1
+    mode: sequential
+    tests:
+      - name: "Create resource"
+        connector: http
+        steps:
+          - action: request
+            method: POST
+            path: /api/resources
+            body:
+              name: "${fn:random_string(alphanumeric, 8, 16)}"
+              id: "${fn:uuid()}"
+            assert:
+              - field: status
+                operator: status_class
+                expected: "2xx"
